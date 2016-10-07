@@ -1,13 +1,17 @@
 package clusterconsensus
 
+import "io"
+
 type InstanceNumber uint64
 type SequenceNumber uint64
 
 const (
 	// Normal operation
-	state_MASTER              int = iota
-	state_PARTICIPANT_CLEAN       // from state_PARTICIPANT_PENDING; waiting for master requests
-	state_PARTICIPANT_PENDING     // from state_PARTICIPANT_CLEAN; pending changes
+	state_MASTER int = iota
+	state_UNJOINED
+	state_PARTICIPANT_CLEAN   // from state_PARTICIPANT_PENDING; waiting for master requests
+	state_PARTICIPANT_PENDING // from state_PARTICIPANT_CLEAN; pending changes
+	state_REMOVED             // Removed from cluster.
 	// During election
 	state_CANDIDATE      // from state_PARTICIPANT_* or state_MASTER
 	state_PENDING_MASTER // from state_PARTICIPANT_*; we have a staged master
@@ -19,14 +23,12 @@ type ClientFactory interface {
 }
 
 // A change that can be applied to a State and sent over the wire
-// Client-provided
+// Client-provided; can be any type
 type Change interface {
-	Serialize() []byte
-	Deserialize([]byte) Change
 }
 
 // A state machine containing the overall state.
-// Client-provided
+// Client-provided; can be any type
 type State interface {
 	Snapshot() []byte
 	Apply(Change)
@@ -48,7 +50,7 @@ type Participant struct {
 	participants map[Member]ConsensusClient
 
 	instance InstanceNumber // nth round
-	serial   SequenceNumber // nth submission in this round
+	sequence SequenceNumber // nth submission in this round
 
 	state            State
 	participantState int // See state_... constants
@@ -56,17 +58,18 @@ type Participant struct {
 	stagedChanges map[SequenceNumber][]Change // staging area for changes (i.e. temporary log)
 	stagedMembers map[SequenceNumber]Member
 
-	// Used to deserialize changes
-	protoTypeDeserialize Change
-	connFactory          ClientFactory
+	connFactory ClientFactory
 }
 
 // Implemented by Participant
 // Used by Server for external requests calling into the participant, as well
 // as making requests to remote participants.
 type ParticipantStub interface {
-	// Master -> participants
-	Prepare(InstanceNumber, Member) (bool, error)
+	// Master -> participants; instance number must be greater than any one previously used;\
+	// second argument is the sending member (i.e. master)
+	// The return value is the highest instance number (equal to argument means positive vote, greater than
+	// argument means that vote has not been given).
+	Prepare(InstanceNumber, Member) (InstanceNumber, error)
 
 	// Master -> participants
 	Accept(InstanceNumber, SequenceNumber, []Change) (bool, error)
@@ -78,7 +81,7 @@ type ParticipantStub interface {
 	RemoveMember(InstanceNumber, SequenceNumber, Member) error
 
 	// Master -> new participant
-	StartParticipation(i InstanceNumber, s SequenceNumber, master Member, members []Member, snapshot []byte)
+	StartParticipation(i InstanceNumber, s SequenceNumber, self Member, master Member, members []Member, snapshot []byte)
 
 	// Participant -> master (so that non-masters can submit changes)
 	SubmitRequest([]Change) error
@@ -88,6 +91,7 @@ type ParticipantStub interface {
 // to send requests to other participants.
 type ConsensusClient interface {
 	ParticipantStub
+	io.Closer
 }
 
 // This is implemented by Participant.

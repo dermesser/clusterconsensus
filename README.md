@@ -46,3 +46,4 @@ Current instance: 22 Current sequence: 44
 
 * Membership changes are relatively straight-forward; they are just special changes that don't use `Accept()`, but rather
   the `AddMember()` and `RemoveMember()` methods in `ParticipantStub`.
+
