@@ -123,9 +123,13 @@ func (p *Participant) tryBecomeMaster() error {
 	errs := []error{}
 
 	for _, member := range p.members {
+		if member == p.self {
+			continue
+		}
 		client, err := p.getConnectedClient(member)
 
 		if err != nil {
+			errs = append(errs, newError(ERR_CONNECT, fmt.Sprintf("Error connecting to %v", member), err))
 			continue
 		}
 
@@ -143,14 +147,12 @@ func (p *Participant) tryBecomeMaster() error {
 		acquiredVotes++
 	}
 
-	if acquiredVotes >= requiredVotes {
-		p.participantState = state_MASTER
-		return nil
-	} else {
+	if acquiredVotes < requiredVotes {
 		p.participantState = state_PENDING_MASTER
 		return newError(ERR_MAJORITY, fmt.Sprintf("No majority in master election: %v", errs), nil)
 	}
 
+	p.participantState = state_MASTER
 	return nil
 }
 
@@ -161,7 +163,7 @@ func (p *Participant) getConnectedClient(m Member) (ConsensusClient, error) {
 	// Try connect
 	if !ok {
 		var err error
-		client, err = p.connFactory.Connect(m)
+		client, err = p.connFactory.Connect(p.cluster, m)
 
 		if err != nil {
 			return nil, newError(ERR_CONNECT, fmt.Sprintf("Could not connect to %v", m), err)
@@ -172,4 +174,115 @@ func (p *Participant) getConnectedClient(m Member) (ConsensusClient, error) {
 	}
 
 	return client, nil
+}
+
+// Local method:
+// Add a member to the cluster that we're the master of. Fails if not master.
+func (p *Participant) AddParticipant(m Member) error {
+	if p.participantState != state_MASTER {
+		return newError(ERR_STATE, "Expected to be MASTER", nil)
+	}
+
+	// 1. Check if already in cluster
+	for _, existing := range p.members {
+		if existing == m {
+			return newError(ERR_STATE, "Participant already exists in cluster", nil)
+		}
+	}
+
+	// 2. Ask other participants to add new member
+
+	requiredVotes := (len(p.members) - 1) / 2
+	acquiredVotes := 0
+	errs := []error{}
+
+	for _, member := range p.members {
+		if member == p.self {
+			continue
+		}
+		client, err := p.getConnectedClient(member)
+
+		if err != nil {
+			errs = append(errs, newError(ERR_CONNECT, fmt.Sprintf("Error connecting to %v", member), err))
+			continue
+		}
+
+		err = client.AddMember(p.instance, p.sequence+1, m)
+
+		if err != nil {
+			errs = append(errs, newError(ERR_CALL, fmt.Sprintf("Error calling Prepare() on %v", member), err))
+			continue
+		}
+
+		acquiredVotes++
+	}
+
+	if acquiredVotes < requiredVotes {
+		return newError(ERR_MAJORITY, fmt.Sprintf("No majority in master election: %v", errs), nil)
+	}
+
+	p.sequence++
+
+	p.members = append(p.members, m)
+	client, err := p.getConnectedClient(m)
+
+	if err != nil {
+		return newError(ERR_CALL, fmt.Sprintf("Couldn't call StartParticipation() on %v", m), err)
+	}
+
+	return client.StartParticipation(p.instance, p.sequence, m, p.self, p.members, p.state.Snapshot())
+}
+
+func (p *Participant) RemoveParticipant(m Member) error {
+	if p.participantState != state_MASTER {
+		return newError(ERR_STATE, "Expected to be MASTER", nil)
+	}
+
+	for ix, existing := range p.members {
+		if existing == m {
+			requiredVotes := (len(p.members) - 1) / 2
+			acquiredVotes := 0
+			errs := []error{}
+
+			for _, member := range p.members {
+				if member == p.self {
+					continue
+				}
+
+				client, err := p.getConnectedClient(member)
+
+				if err != nil {
+					errs = append(errs, newError(ERR_CONNECT, fmt.Sprintf("Error connecting to %v", member), err))
+					continue
+				}
+
+				err = client.RemoveMember(p.instance, p.sequence+1, m)
+
+				if err != nil {
+					errs = append(errs, newError(ERR_CALL, fmt.Sprintf("Error calling RemoveMember() on %v", member), nil))
+					continue
+				}
+
+				acquiredVotes++
+			}
+
+			if acquiredVotes < requiredVotes {
+				return newError(ERR_MAJORITY, fmt.Sprintf("No majority for RemoveMember(); errors: %v", errs), nil)
+			}
+
+			// commit. The next accept() with the new sequence number will remove it on all clients.
+			p.sequence++
+			p.members = append(p.members[0:ix], p.members[ix+1:]...)
+
+			if client, ok := p.participants[m]; ok {
+				client.Close()
+				delete(p.participants, m)
+			}
+
+			break
+		}
+	}
+
+	return newError(ERR_STATE, "Participant doesn't exist in cluster", nil)
+
 }

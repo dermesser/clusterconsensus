@@ -19,7 +19,8 @@ const (
 
 // Factory for connections to remote participants
 type ClientFactory interface {
-	Connect(Member) (ConsensusClient, error)
+	// Connect to member m in cluster c
+	Connect(c string, m Member) (ConsensusClient, error)
 }
 
 // A change that can be applied to a State and sent over the wire
@@ -43,6 +44,7 @@ type Member struct {
 // One participant of the consensus
 // Implements ConsensusServer
 type Participant struct {
+	cluster string
 	members []Member
 	master  map[InstanceNumber]Member // If a past Instance is attempted to be Prepare()d, then we can answer with the master of that Instance
 	self    Member
@@ -55,8 +57,9 @@ type Participant struct {
 	state            State
 	participantState int // See state_... constants
 
-	stagedChanges map[SequenceNumber][]Change // staging area for changes (i.e. temporary log)
-	stagedMembers map[SequenceNumber]Member
+	stagedChanges  map[SequenceNumber][]Change // staging area for changes (i.e. temporary log)
+	stagedMembers  map[SequenceNumber]Member
+	stagedRemovals map[SequenceNumber]Member
 
 	connFactory ClientFactory
 }
@@ -81,7 +84,7 @@ type ParticipantStub interface {
 	RemoveMember(InstanceNumber, SequenceNumber, Member) error
 
 	// Master -> new participant
-	StartParticipation(i InstanceNumber, s SequenceNumber, self Member, master Member, members []Member, snapshot []byte)
+	StartParticipation(i InstanceNumber, s SequenceNumber, self Member, master Member, members []Member, snapshot []byte) error
 
 	// Participant -> master (so that non-masters can submit changes)
 	SubmitRequest([]Change) error
