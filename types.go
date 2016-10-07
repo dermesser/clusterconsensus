@@ -1,5 +1,23 @@
 package clusterconsensus
 
+type InstanceNumber uint64
+type SequenceNumber uint64
+
+const (
+	// Normal operation
+	state_MASTER              int = iota
+	state_PARTICIPANT_CLEAN       // from state_PARTICIPANT_PENDING; waiting for master requests
+	state_PARTICIPANT_PENDING     // from state_PARTICIPANT_CLEAN; pending changes
+	// During election
+	state_CANDIDATE      // from state_PARTICIPANT_* or state_MASTER
+	state_PENDING_MASTER // from state_PARTICIPANT_*; we have a staged master
+)
+
+// Factory for connections to remote participants
+type ClientFactory interface {
+	Connect(Member) (ConsensusClient, error)
+}
+
 // A change that can be applied to a State and sent over the wire
 // Client-provided
 type Change interface {
@@ -17,24 +35,11 @@ type State interface {
 
 // A remote member of the consensus
 type Member struct {
-	addr string
+	Address string
 }
 
-type InstanceNumber uint64
-type SequenceNumber uint64
-
-const (
-	// Normal operation
-	STATE_MASTER              int = iota
-	STATE_PARTICIPANT_CLEAN       // from STATE_PARTICIPANT_PENDING; waiting for master requests
-	STATE_PARTICIPANT_PENDING     // from STATE_PARTICIPANT_CLEAN; pending changes
-	// During election
-	STATE_CANDIDATE      // from STATE_PARTICIPANT_* or STATE_MASTER
-	STATE_PENDING_MASTER // from STATE_PARTICIPANT_*; we have a staged master
-)
-
 // One participant of the consensus
-// implements participating; implementation-provided
+// Implements ConsensusServer
 type Participant struct {
 	members []Member
 	master  map[InstanceNumber]Member // If a past Instance is attempted to be Prepare()d, then we can answer with the master of that Instance
@@ -46,13 +51,14 @@ type Participant struct {
 	serial   SequenceNumber // nth submission in this round
 
 	state            State
-	participantState int // See STATE_... constants
+	participantState int // See state_... constants
 
-	stagedChanges map[SequenceNumber]Change // staging area for changes (i.e. temporary log)
-	stagedMembers map[SequenceNumber]Change
+	stagedChanges map[SequenceNumber][]Change // staging area for changes (i.e. temporary log)
+	stagedMembers map[SequenceNumber]Member
 
 	// Used to deserialize changes
 	protoTypeDeserialize Change
+	connFactory          ClientFactory
 }
 
 // Implemented by Participant
@@ -63,7 +69,7 @@ type ParticipantStub interface {
 	Prepare(InstanceNumber, Member) (bool, error)
 
 	// Master -> participants
-	Accept(InstanceNumber, SequenceNumber, []Change) error
+	Accept(InstanceNumber, SequenceNumber, []Change) (bool, error)
 	// Master -> participants
 	// Accept() with a different argument
 	AddMember(InstanceNumber, SequenceNumber, Member) error
@@ -75,13 +81,16 @@ type ParticipantStub interface {
 	StartParticipation(i InstanceNumber, s SequenceNumber, master Member, members []Member, snapshot []byte)
 
 	// Participant -> master (so that non-masters can submit changes)
-	Submit([]Change) error
+	SubmitRequest([]Change) error
 }
 
+// Applications using this package need to implement this interface in order for the library to be able
+// to send requests to other participants.
 type ConsensusClient interface {
 	ParticipantStub
 }
 
+// This is implemented by Participant.
 type ConsensusServer interface {
 	ParticipantStub
 }
