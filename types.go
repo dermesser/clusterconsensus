@@ -68,7 +68,7 @@ type Participant struct {
 // Used by Server for external requests calling into the participant, as well
 // as making requests to remote participants.
 type ParticipantStub interface {
-	// Master -> participants; instance number must be greater than any one previously used;\
+	// Master -> participants; instance number must be greater than any one previously used;
 	// second argument is the sending member (i.e. master)
 	// The return value is the highest instance number (equal to argument means positive vote, greater than
 	// argument means that vote has not been given).
