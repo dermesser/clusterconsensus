@@ -84,7 +84,7 @@ type ParticipantStub interface {
 	RemoveMember(InstanceNumber, SequenceNumber, Member) error
 
 	// Master -> new participant
-	StartParticipation(i InstanceNumber, s SequenceNumber, self Member, master Member, members []Member, snapshot []byte) error
+	StartParticipation(i InstanceNumber, s SequenceNumber, cluster string, self Member, master Member, members []Member, snapshot []byte) error
 
 	// Participant -> master (so that non-masters can submit changes)
 	SubmitRequest([]Change) error
