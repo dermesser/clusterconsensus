@@ -2,6 +2,38 @@ package clusterconsensus
 
 import "fmt"
 
+// Set up a new participant. Proceed by Register()ing it with a clusterconsensus.Server, and
+// calling InitMaster() if this participant is the initial master (otherwise send a StartParticipation
+// request to the server, as described in README.md)
+func NewParticipant(cluster string, connector ClientFactory, initialState State) *Participant {
+	return &Participant{
+		cluster: cluster,
+		members: []Member{},
+		master:  make(map[InstanceNumber]Member),
+		self:    Member{},
+
+		participants: make(map[Member]ConsensusClient),
+
+		instance: 0,
+		sequence: 0,
+
+		state:            initialState,
+		participantState: state_UNJOINED,
+
+		stagedChanges:  make(map[SequenceNumber][]Change),
+		stagedMembers:  make(map[SequenceNumber]Member),
+		stagedRemovals: make(map[SequenceNumber]Member),
+
+		connFactory: connector,
+	}
+}
+
+// If a participant is supposed to be the first member and master, call InitMaster(). After that, you
+// can call AddParticipant() to add more members to the cluster.
+func (p *Participant) InitMaster(self Member, snapshot []byte) {
+	p.StartParticipation(1, 0, p.cluster, self, self, []Member{self}, snapshot)
+}
+
 // This module implements local functionality for `Participant`, which is defined in types.rs.
 // This means that the following (exported) functions are supposed to be called from the application that
 // uses the clusterconsensus package.
@@ -85,7 +117,7 @@ func (p *Participant) submitToRemoteMaster(c []Change) error {
 		return newError(ERR_STATE, fmt.Sprintf("Expected PARTICIPANT_CLEAN or PARTICIPANT_PENDING, but is %d", p.participantState), nil)
 	}
 
-	master, ok := p.master[p.instance]
+	master, ok := p.getMaster()
 
 	if !ok {
 		panic(fmt.Sprintf("Bad instance number - no master: %d/%v", p.instance, p.master))
@@ -230,7 +262,7 @@ func (p *Participant) AddParticipant(m Member) error {
 		return newError(ERR_CALL, fmt.Sprintf("Couldn't call StartParticipation() on %v", m), err)
 	}
 
-	return client.StartParticipation(p.instance, p.sequence, m, p.self, p.members, p.state.Snapshot())
+	return client.StartParticipation(p.instance, p.sequence, p.cluster, m, p.self, p.members, p.state.Snapshot())
 }
 
 func (p *Participant) RemoveParticipant(m Member) error {
