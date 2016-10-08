@@ -208,7 +208,7 @@ func (p *Participant) tryBecomeMaster() error {
 	}
 
 	if acquiredVotes < requiredVotes {
-		p.participantState = state_PENDING_MASTER
+		p.participantState = state_PARTICIPANT_CLEAN
 		return NewError(ERR_MAJORITY, fmt.Sprintf("No majority in master election: %v", errs), nil)
 	}
 
