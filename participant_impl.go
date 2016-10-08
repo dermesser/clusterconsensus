@@ -95,7 +95,7 @@ func (p *Participant) commitStagedChanges(i InstanceNumber, s SequenceNumber) {
 
 	// 2. If needed, commit previous changes
 
-	for seq := p.sequence; seq < s; s++ {
+	for seq := p.sequence; seq < s; seq++ {
 		if seq < s {
 			if changes, ok := p.stagedChanges[seq]; ok {
 				for _, c := range changes {
@@ -108,7 +108,7 @@ func (p *Participant) commitStagedChanges(i InstanceNumber, s SequenceNumber) {
 
 	// 3. and add staged member
 
-	for seq := p.sequence; seq < s; s++ {
+	for seq := p.sequence; seq < s; seq++ {
 		if seq < s {
 			if member, ok := p.stagedMembers[seq]; ok {
 				p.members = append(p.members, member)
@@ -123,7 +123,7 @@ func (p *Participant) commitStagedChanges(i InstanceNumber, s SequenceNumber) {
 	// 4. and commit staged removals
 
 outer:
-	for seq := p.sequence; seq < s; s++ {
+	for seq := p.sequence; seq < s; seq++ {
 		if m, ok := p.stagedRemovals[seq]; ok {
 			for ix, existing := range p.members {
 				if existing == m {
@@ -139,6 +139,7 @@ outer:
 
 						p.participantState = state_PARTICIPANT_PENDING
 						delete(p.participants, m)
+						delete(p.stagedRemovals, seq)
 					}
 					break outer
 				}
