@@ -105,6 +105,7 @@ func (h ParticipantHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h ParticipantHandler) parseRequest(target interface{}, r *http.Request) error {
 	body := bytes.NewBuffer(nil)
 	n, err := body.ReadFrom(r.Body)
+	r.Body.Close()
 
 	if err != nil || n == 0 {
 		return con.NewError(con.ERR_IO, "Couldn't read request", err)
