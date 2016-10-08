@@ -54,17 +54,17 @@ func (h ParticipantHandler) methodFromPath(path string) string {
 		return ""
 	}
 
-	if strings.HasSuffix(base, method_PREPARE) {
+	if strings.HasSuffix(path, method_PREPARE) {
 		return method_PREPARE
-	} else if strings.HasSuffix(base, method_ACCEPT) {
+	} else if strings.HasSuffix(path, method_ACCEPT) {
 		return method_ACCEPT
-	} else if strings.HasSuffix(base, method_ADDMEMBER) {
+	} else if strings.HasSuffix(path, method_ADDMEMBER) {
 		return method_ADDMEMBER
-	} else if strings.HasSuffix(base, method_RMMEMBER) {
+	} else if strings.HasSuffix(path, method_RMMEMBER) {
 		return method_RMMEMBER
-	} else if strings.HasSuffix(base, method_START_PARTICIPATION) {
+	} else if strings.HasSuffix(path, method_START_PARTICIPATION) {
 		return method_START_PARTICIPATION
-	} else if strings.HasSuffix(base, method_SUBMIT) {
+	} else if strings.HasSuffix(path, method_SUBMIT) {
 		return method_SUBMIT
 	} else {
 		return ""
@@ -74,7 +74,7 @@ func (h ParticipantHandler) methodFromPath(path string) string {
 func (h ParticipantHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(400)
-		w.Write(nil)
+		w.Write([]byte{})
 		return
 	}
 	defer r.Body.Close()
@@ -83,7 +83,7 @@ func (h ParticipantHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if method == "" {
 		w.WriteHeader(400)
-		w.Write(nil)
+		w.Write([]byte{})
 	}
 
 	switch method {
@@ -125,7 +125,7 @@ func (h ParticipantHandler) sendError(e con.ConsensusError, w http.ResponseWrite
 	j, err := json.Marshal(FromError(e))
 
 	if err != nil {
-		w.Write(nil)
+		w.Write([]byte{})
 	} else {
 		w.Write(j)
 	}
@@ -136,7 +136,7 @@ func (h ParticipantHandler) sendResponse(r interface{}, w http.ResponseWriter) {
 
 	if err != nil {
 		w.WriteHeader(500)
-		w.Write(nil)
+		w.Write([]byte{})
 	} else {
 		w.WriteHeader(200)
 		w.Write(j)
