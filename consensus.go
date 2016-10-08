@@ -95,8 +95,11 @@ func (p *Participant) submitAsMaster(c []Change) error {
 			errs = append(errs, NewError(ERR_CALL, "Error from remote participant", err))
 
 			// force: re-send snapshot if the client has seen a gap
+
+			// Useful to solve generic network errors
 			p.forceReconnect(member)
 
+			// Especially useful to solve ERR_STATE, ERR_GAP errors
 			client.StartParticipation(p.instance, p.sequence, p.cluster, member, p.self, p.members, p.state.Snapshot())
 
 			ok, err := client.Accept(p.instance, p.sequence+1, c)
@@ -197,9 +200,8 @@ func (p *Participant) tryBecomeMaster() error {
 			errs = append(errs, NewError(ERR_CALL, fmt.Sprintf("Error calling Prepare() on %v", member), err))
 			continue
 		}
-		if newInstance != p.instance+1 {
-			errs = append(errs, NewError(ERR_DENIED, fmt.Sprintf("Vote denied; proposal %d, response %d", p.instance+1, newInstance), nil))
-			continue
+		if newInstance > p.instance+1 {
+			return NewError(ERR_DENIED, fmt.Sprintf("We don't have an up-to-date local state (instance %d/%d)", p.instance+1, newInstance), nil)
 		}
 
 		acquiredVotes++
@@ -211,6 +213,7 @@ func (p *Participant) tryBecomeMaster() error {
 	}
 
 	p.instance++
+	p.sequence = 0
 	p.participantState = state_MASTER
 	return nil
 }
