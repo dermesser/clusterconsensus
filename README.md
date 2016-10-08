@@ -26,7 +26,7 @@ We assume that the current instance is 12, and the sequence number in that insta
     * If the Participant is not master, it will send the request to the master using the `Submit()` method on the stub.
     * If the Participant is the master, or has received a `Submit` request, it will proceed by coordinating the change.
 * First, all non-master participants are sent `Accept(12, 35, []Change{ *some change* })`.
-    * The request is sent using the `ConsensusClient` stub that was returned by the `ClientFactory` implementation.
+    * The request is sent using the `ConsensusClient` stub that was returned by the `Connector` implementation.
 * This leads to the non-master participants *staging* that change into a special area. The change is not yet applied to the state machine.
 * The next time the master wants to apply another change, it sends `Accept(12, 36, []Change{ *some new change* })`. This leads
   to non-master participants "committing" (i.e. applying) all staged changes before sequence `36` to the state machine, including

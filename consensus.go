@@ -5,7 +5,7 @@ import "fmt"
 // Set up a new participant. Proceed by Register()ing it with a clusterconsensus.Server, and
 // calling InitMaster() if this participant is the initial master (otherwise send a StartParticipation
 // request to the server, as described in README.md)
-func NewParticipant(cluster string, connector ClientFactory, initialState State) *Participant {
+func NewParticipant(cluster string, connector Connector, initialState State) *Participant {
 	return &Participant{
 		cluster: cluster,
 		members: []Member{},
@@ -24,7 +24,7 @@ func NewParticipant(cluster string, connector ClientFactory, initialState State)
 		stagedMembers:  make(map[SequenceNumber]Member),
 		stagedRemovals: make(map[SequenceNumber]Member),
 
-		connFactory: connector,
+		connector: connector,
 	}
 }
 
@@ -58,7 +58,7 @@ func (p *Participant) Submit(c []Change) error {
 	} else if p.participantState == state_PARTICIPANT_CLEAN || p.participantState == state_PARTICIPANT_PENDING {
 		return p.submitToRemoteMaster(c)
 	} else if p.participantState == state_CANDIDATE || p.participantState == state_PENDING_MASTER {
-		return newError(ERR_STATE, "Currently in candidate or unconfirmed-master state; try again later", nil)
+		return NewError(ERR_STATE, "Currently in candidate or unconfirmed-master state; try again later", nil)
 	}
 
 	return nil
@@ -71,7 +71,7 @@ func (p *Participant) submitAsMaster(c []Change) error {
 	acquiredVotes := 0
 	errs := []error{}
 
-	// TODO: This can be made asynchronous
+	// TODO: This can be made asynchronous/concurrently
 
 	// Send out Accept() requests
 	for _, member := range p.members {
@@ -88,11 +88,11 @@ func (p *Participant) submitAsMaster(c []Change) error {
 		ok, err := client.Accept(p.instance, p.sequence+1, c)
 
 		if err != nil {
-			errs = append(errs, newError(ERR_CALL, "Error from remote participant", err))
+			errs = append(errs, NewError(ERR_CALL, "Error from remote participant", err))
 			continue
 		}
 		if !ok {
-			errs = append(errs, newError(ERR_DENIED, "Vote denied", nil))
+			errs = append(errs, NewError(ERR_DENIED, "Vote denied", nil))
 			continue
 		}
 
@@ -104,7 +104,7 @@ func (p *Participant) submitAsMaster(c []Change) error {
 		p.sequence++
 		// Now the next Accept() request will commit this submission to the state machine
 	} else {
-		return newError(ERR_MAJORITY, fmt.Sprintf("Missed majority: %d/%d. Errors: %v", acquiredVotes, requiredVotes, errs), nil)
+		return NewError(ERR_MAJORITY, fmt.Sprintf("Missed majority: %d/%d. Errors: %v", acquiredVotes, requiredVotes, errs), nil)
 	}
 
 	return nil
@@ -114,7 +114,7 @@ func (p *Participant) submitAsMaster(c []Change) error {
 // ourselves.
 func (p *Participant) submitToRemoteMaster(c []Change) error {
 	if p.participantState != state_PARTICIPANT_CLEAN && p.participantState != state_PARTICIPANT_PENDING {
-		return newError(ERR_STATE, fmt.Sprintf("Expected PARTICIPANT_CLEAN or PARTICIPANT_PENDING, but is %d", p.participantState), nil)
+		return NewError(ERR_STATE, fmt.Sprintf("Expected PARTICIPANT_CLEAN or PARTICIPANT_PENDING, but is %d", p.participantState), nil)
 	}
 
 	master, ok := p.getMaster()
@@ -154,6 +154,7 @@ func (p *Participant) tryBecomeMaster() error {
 	acquiredVotes := 0
 	errs := []error{}
 
+	// TODO: This can be made asynchronous/concurrently
 	for _, member := range p.members {
 		if member == p.self {
 			continue
@@ -161,18 +162,18 @@ func (p *Participant) tryBecomeMaster() error {
 		client, err := p.getConnectedClient(member)
 
 		if err != nil {
-			errs = append(errs, newError(ERR_CONNECT, fmt.Sprintf("Error connecting to %v", member), err))
+			errs = append(errs, NewError(ERR_CONNECT, fmt.Sprintf("Error connecting to %v", member), err))
 			continue
 		}
 
 		newInstance, err := client.Prepare(p.instance+1, p.self)
 
 		if err != nil {
-			errs = append(errs, newError(ERR_CALL, fmt.Sprintf("Error calling Prepare() on %v", member), err))
+			errs = append(errs, NewError(ERR_CALL, fmt.Sprintf("Error calling Prepare() on %v", member), err))
 			continue
 		}
 		if newInstance != p.instance+1 {
-			errs = append(errs, newError(ERR_DENIED, fmt.Sprintf("Vote denied; proposal %d, response %d", p.instance+1, newInstance), nil))
+			errs = append(errs, NewError(ERR_DENIED, fmt.Sprintf("Vote denied; proposal %d, response %d", p.instance+1, newInstance), nil))
 			continue
 		}
 
@@ -181,7 +182,7 @@ func (p *Participant) tryBecomeMaster() error {
 
 	if acquiredVotes < requiredVotes {
 		p.participantState = state_PENDING_MASTER
-		return newError(ERR_MAJORITY, fmt.Sprintf("No majority in master election: %v", errs), nil)
+		return NewError(ERR_MAJORITY, fmt.Sprintf("No majority in master election: %v", errs), nil)
 	}
 
 	p.participantState = state_MASTER
@@ -195,10 +196,10 @@ func (p *Participant) getConnectedClient(m Member) (ConsensusClient, error) {
 	// Try connect
 	if !ok {
 		var err error
-		client, err = p.connFactory.Connect(p.cluster, m)
+		client, err = p.connector.Connect(p.cluster, m)
 
 		if err != nil {
-			return nil, newError(ERR_CONNECT, fmt.Sprintf("Could not connect to %v", m), err)
+			return nil, NewError(ERR_CONNECT, fmt.Sprintf("Could not connect to %v", m), err)
 		} else {
 			p.participants[m] = client
 			return client, nil
@@ -212,13 +213,13 @@ func (p *Participant) getConnectedClient(m Member) (ConsensusClient, error) {
 // Add a member to the cluster that we're the master of. Fails if not master.
 func (p *Participant) AddParticipant(m Member) error {
 	if p.participantState != state_MASTER {
-		return newError(ERR_STATE, "Expected to be MASTER", nil)
+		return NewError(ERR_STATE, "Expected to be MASTER", nil)
 	}
 
 	// 1. Check if already in cluster
 	for _, existing := range p.members {
 		if existing == m {
-			return newError(ERR_STATE, "Participant already exists in cluster", nil)
+			return NewError(ERR_STATE, "Participant already exists in cluster", nil)
 		}
 	}
 
@@ -228,6 +229,7 @@ func (p *Participant) AddParticipant(m Member) error {
 	acquiredVotes := 0
 	errs := []error{}
 
+	// TODO: This can be made asynchronous/concurrently
 	for _, member := range p.members {
 		if member == p.self {
 			continue
@@ -235,14 +237,14 @@ func (p *Participant) AddParticipant(m Member) error {
 		client, err := p.getConnectedClient(member)
 
 		if err != nil {
-			errs = append(errs, newError(ERR_CONNECT, fmt.Sprintf("Error connecting to %v", member), err))
+			errs = append(errs, NewError(ERR_CONNECT, fmt.Sprintf("Error connecting to %v", member), err))
 			continue
 		}
 
 		err = client.AddMember(p.instance, p.sequence+1, m)
 
 		if err != nil {
-			errs = append(errs, newError(ERR_CALL, fmt.Sprintf("Error calling Prepare() on %v", member), err))
+			errs = append(errs, NewError(ERR_CALL, fmt.Sprintf("Error calling Prepare() on %v", member), err))
 			continue
 		}
 
@@ -250,7 +252,7 @@ func (p *Participant) AddParticipant(m Member) error {
 	}
 
 	if acquiredVotes < requiredVotes {
-		return newError(ERR_MAJORITY, fmt.Sprintf("No majority in master election: %v", errs), nil)
+		return NewError(ERR_MAJORITY, fmt.Sprintf("No majority in master election: %v", errs), nil)
 	}
 
 	p.sequence++
@@ -259,7 +261,7 @@ func (p *Participant) AddParticipant(m Member) error {
 	client, err := p.getConnectedClient(m)
 
 	if err != nil {
-		return newError(ERR_CALL, fmt.Sprintf("Couldn't call StartParticipation() on %v", m), err)
+		return NewError(ERR_CALL, fmt.Sprintf("Couldn't call StartParticipation() on %v", m), err)
 	}
 
 	return client.StartParticipation(p.instance, p.sequence, p.cluster, m, p.self, p.members, p.state.Snapshot())
@@ -267,7 +269,7 @@ func (p *Participant) AddParticipant(m Member) error {
 
 func (p *Participant) RemoveParticipant(m Member) error {
 	if p.participantState != state_MASTER {
-		return newError(ERR_STATE, "Expected to be MASTER", nil)
+		return NewError(ERR_STATE, "Expected to be MASTER", nil)
 	}
 
 	for ix, existing := range p.members {
@@ -276,6 +278,7 @@ func (p *Participant) RemoveParticipant(m Member) error {
 			acquiredVotes := 0
 			errs := []error{}
 
+			// TODO: This can be made asynchronous/concurrently
 			for _, member := range p.members {
 				if member == p.self {
 					continue
@@ -284,14 +287,14 @@ func (p *Participant) RemoveParticipant(m Member) error {
 				client, err := p.getConnectedClient(member)
 
 				if err != nil {
-					errs = append(errs, newError(ERR_CONNECT, fmt.Sprintf("Error connecting to %v", member), err))
+					errs = append(errs, NewError(ERR_CONNECT, fmt.Sprintf("Error connecting to %v", member), err))
 					continue
 				}
 
 				err = client.RemoveMember(p.instance, p.sequence+1, m)
 
 				if err != nil {
-					errs = append(errs, newError(ERR_CALL, fmt.Sprintf("Error calling RemoveMember() on %v", member), nil))
+					errs = append(errs, NewError(ERR_CALL, fmt.Sprintf("Error calling RemoveMember() on %v", member), nil))
 					continue
 				}
 
@@ -299,7 +302,7 @@ func (p *Participant) RemoveParticipant(m Member) error {
 			}
 
 			if acquiredVotes < requiredVotes {
-				return newError(ERR_MAJORITY, fmt.Sprintf("No majority for RemoveMember(); errors: %v", errs), nil)
+				return NewError(ERR_MAJORITY, fmt.Sprintf("No majority for RemoveMember(); errors: %v", errs), nil)
 			}
 
 			// commit. The next accept() with the new sequence number will remove it on all clients.
@@ -315,6 +318,6 @@ func (p *Participant) RemoveParticipant(m Member) error {
 		}
 	}
 
-	return newError(ERR_STATE, "Participant doesn't exist in cluster", nil)
+	return NewError(ERR_STATE, "Participant doesn't exist in cluster", nil)
 
 }

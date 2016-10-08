@@ -18,7 +18,7 @@ const (
 )
 
 // Factory for connections to remote participants
-type ClientFactory interface {
+type Connector interface {
 	// Connect to member m in cluster c
 	Connect(c string, m Member) (ConsensusClient, error)
 }
@@ -26,6 +26,12 @@ type ClientFactory interface {
 // A change that can be applied to a State and sent over the wire
 // Client-provided; can be any type
 type Change interface {
+	Serialize() []byte
+}
+
+// Deserialzie a Change from a bytestring.
+type ChangeDeserializer interface {
+	Deserialize([]byte) Change
 }
 
 // A state machine containing the overall state.
@@ -61,7 +67,7 @@ type Participant struct {
 	stagedMembers  map[SequenceNumber]Member
 	stagedRemovals map[SequenceNumber]Member
 
-	connFactory ClientFactory
+	connector Connector
 }
 
 // Implemented by Participant

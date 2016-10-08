@@ -15,7 +15,7 @@ func (p *Participant) getMaster() (Member, bool) {
 // Asks for a vote for m to become master of instance i.
 func (p *Participant) Prepare(i InstanceNumber, m Member) (InstanceNumber, error) {
 	if p.participantState == state_REMOVED || p.participantState == state_UNJOINED {
-		return 0, newError(ERR_STATE, "Prepare() called on unjoined or removed participant", nil)
+		return 0, NewError(ERR_STATE, "Prepare() called on unjoined or removed participant", nil)
 	}
 
 	// 1. instance must be greater than current
@@ -35,17 +35,17 @@ func (p *Participant) Prepare(i InstanceNumber, m Member) (InstanceNumber, error
 // Asks to accept the changes c for round s of instance i.
 func (p *Participant) Accept(i InstanceNumber, s SequenceNumber, c []Change) (bool, error) {
 	if p.participantState == state_REMOVED || p.participantState == state_UNJOINED {
-		return false, newError(ERR_STATE, "Accept() called on unjoined participant", nil)
+		return false, NewError(ERR_STATE, "Accept() called on unjoined participant", nil)
 	}
 
 	// 1. Do checks on supplied serial numbers
 	if i < p.instance {
-		return false, newError(ERR_DENIED, fmt.Sprintf("Instance %d less than current (%d)", i, p.instance), nil)
+		return false, NewError(ERR_DENIED, fmt.Sprintf("Instance %d less than current (%d)", i, p.instance), nil)
 	}
 
 	// s == p.sequence is allowed! (for non-committed Accept()s)
 	if s < p.sequence {
-		return false, newError(ERR_DENIED, fmt.Sprintf("Sequence %d less than current (%d)", s, p.sequence), nil)
+		return false, NewError(ERR_DENIED, fmt.Sprintf("Sequence %d less than current (%d)", s, p.sequence), nil)
 	}
 
 	// 2., 3.
@@ -149,17 +149,17 @@ outer:
 // Asks to add member m to cluster in instance i, round s.
 func (p *Participant) AddMember(i InstanceNumber, s SequenceNumber, m Member) error {
 	if p.participantState == state_REMOVED || p.participantState == state_UNJOINED {
-		return newError(ERR_STATE, "AddMember() called on removed or unjoined participant", nil)
+		return NewError(ERR_STATE, "AddMember() called on removed or unjoined participant", nil)
 	}
 
 	// 1. Do checks on supplied serial numbers
 	if i < p.instance {
-		return newError(ERR_DENIED, fmt.Sprintf("Instance %d less than current (%d)", i, p.instance), nil)
+		return NewError(ERR_DENIED, fmt.Sprintf("Instance %d less than current (%d)", i, p.instance), nil)
 	}
 
 	// s == p.sequence is allowed! (for non-committed Accept()s)
 	if s < p.sequence {
-		return newError(ERR_DENIED, fmt.Sprintf("Sequence %d less than current (%d)", s, p.sequence), nil)
+		return NewError(ERR_DENIED, fmt.Sprintf("Sequence %d less than current (%d)", s, p.sequence), nil)
 	}
 
 	p.commitStagedChanges(i, s)
@@ -172,7 +172,7 @@ func (p *Participant) AddMember(i InstanceNumber, s SequenceNumber, m Member) er
 
 	for _, existing := range p.members {
 		if existing == m {
-			return newError(ERR_DENIED, fmt.Sprintf("Member %v already exists here", m), nil)
+			return NewError(ERR_DENIED, fmt.Sprintf("Member %v already exists here", m), nil)
 		}
 	}
 
@@ -192,17 +192,17 @@ func (p *Participant) AddMember(i InstanceNumber, s SequenceNumber, m Member) er
 // if m describes p.
 func (p *Participant) RemoveMember(i InstanceNumber, s SequenceNumber, m Member) error {
 	if p.participantState == state_REMOVED || p.participantState == state_UNJOINED {
-		return newError(ERR_STATE, "RemoveMember() called on removed or unjoined participant", nil)
+		return NewError(ERR_STATE, "RemoveMember() called on removed or unjoined participant", nil)
 	}
 
 	// 1. Do checks on supplied serial numbers
 	if i < p.instance {
-		return newError(ERR_DENIED, fmt.Sprintf("Instance %d less than current (%d)", i, p.instance), nil)
+		return NewError(ERR_DENIED, fmt.Sprintf("Instance %d less than current (%d)", i, p.instance), nil)
 	}
 
 	// s == p.sequence is allowed! (for non-committed Accept()s)
 	if s < p.sequence {
-		return newError(ERR_DENIED, fmt.Sprintf("Sequence %d less than current (%d)", s, p.sequence), nil)
+		return NewError(ERR_DENIED, fmt.Sprintf("Sequence %d less than current (%d)", s, p.sequence), nil)
 	}
 
 	p.commitStagedChanges(i, s)
@@ -223,7 +223,7 @@ func (p *Participant) RemoveMember(i InstanceNumber, s SequenceNumber, m Member)
 		}
 	}
 
-	return newError(ERR_DENIED, fmt.Sprintf("Member %v doesn't exist here", m), nil)
+	return NewError(ERR_DENIED, fmt.Sprintf("Member %v doesn't exist here", m), nil)
 }
 
 func (p *Participant) removeFromCluster() {
@@ -249,7 +249,7 @@ func (p *Participant) removeFromCluster() {
 // Asks p to start participating in a cluster.
 func (p *Participant) StartParticipation(i InstanceNumber, s SequenceNumber, cluster string, self Member, master Member, members []Member, snapshot []byte) error {
 	if p.participantState != state_UNJOINED {
-		return newError(ERR_STATE, fmt.Sprintf("Expected state UNJOINED, am in state %d", p.participantState), nil)
+		return NewError(ERR_STATE, fmt.Sprintf("Expected state UNJOINED, am in state %d", p.participantState), nil)
 	}
 
 	p.cluster = cluster
@@ -280,7 +280,7 @@ func (p *Participant) SubmitRequest(c []Change) error {
 	// *Assert* that we're master
 
 	if p.participantState != state_MASTER {
-		return newError(ERR_STATE, "Can't request changes to be submitted on non-master", nil)
+		return NewError(ERR_STATE, "Can't request changes to be submitted on non-master", nil)
 	} else {
 		return p.submitAsMaster(c)
 	}
