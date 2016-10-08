@@ -1,6 +1,9 @@
 package clusterconsensus
 
-import "io"
+import (
+	"io"
+	"sync"
+)
 
 type InstanceNumber uint64
 type SequenceNumber uint64
@@ -50,6 +53,8 @@ type Member struct {
 // One participant of the consensus
 // Implements ConsensusServer
 type Participant struct {
+	sync.Mutex
+
 	cluster string
 	members []Member
 	master  map[InstanceNumber]Member // If a past Instance is attempted to be Prepare()d, then we can answer with the master of that Instance

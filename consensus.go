@@ -57,7 +57,7 @@ func (p *Participant) Submit(c []Change) error {
 		return p.submitAsMaster(c)
 	} else if p.participantState == state_PARTICIPANT_CLEAN || p.participantState == state_PARTICIPANT_PENDING {
 		return p.submitToRemoteMaster(c)
-	} else if p.participantState == state_CANDIDATE || p.participantState == state_PENDING_MASTER {
+	} else if p.participantState == state_CANDIDATE || p.participantState == state_PENDING_MASTER || p.participantState == state_UNJOINED {
 		return NewError(ERR_STATE, "Currently in candidate or unconfirmed-master state; try again later", nil)
 	}
 
@@ -65,6 +65,9 @@ func (p *Participant) Submit(c []Change) error {
 }
 
 func (p *Participant) submitAsMaster(c []Change) error {
+	p.Lock()
+	defer p.Unlock()
+
 	// Calculate majority. We ourselves count as accepting.
 	// For 3 members, we need 1 other positive vote; for 5 members, we need 2 other votes
 	requiredVotes := (len(p.members) - 1) / 2
@@ -92,14 +95,14 @@ func (p *Participant) submitAsMaster(c []Change) error {
 			errs = append(errs, NewError(ERR_CALL, "Error from remote participant", err))
 
 			// force: re-send snapshot if the client has seen a gap
-			if err.(ConsensusError).Code() == ERR_GAP {
-				client.StartParticipation(p.instance, p.sequence, p.cluster, member, p.self, p.members, p.state.Snapshot())
+			p.forceReconnect(member)
 
-				ok, err := client.Accept(p.instance, p.sequence+1, c)
+			client.StartParticipation(p.instance, p.sequence, p.cluster, member, p.self, p.members, p.state.Snapshot())
 
-				if ok && err == nil {
-					acquiredVotes++
-				}
+			ok, err := client.Accept(p.instance, p.sequence+1, c)
+
+			if ok && err == nil {
+				acquiredVotes++
 			}
 
 			continue
@@ -115,7 +118,12 @@ func (p *Participant) submitAsMaster(c []Change) error {
 	if acquiredVotes >= requiredVotes {
 		// we got the majority
 		p.sequence++
-		// Now the next Accept() request will commit this submission to the state machine
+
+		// Now the next Accept() request will commit this submission to the remote state machines
+
+		for _, chg := range c {
+			p.state.Apply(chg)
+		}
 	} else {
 		return NewError(ERR_MAJORITY, fmt.Sprintf("Missed majority: %d/%d. Errors: %v", acquiredVotes, requiredVotes, errs), nil)
 	}
@@ -159,6 +167,9 @@ func (p *Participant) submitToRemoteMaster(c []Change) error {
 }
 
 func (p *Participant) tryBecomeMaster() error {
+	p.Lock()
+	defer p.Unlock()
+
 	// 1. Set state
 	p.participantState = state_CANDIDATE
 
@@ -199,6 +210,7 @@ func (p *Participant) tryBecomeMaster() error {
 		return NewError(ERR_MAJORITY, fmt.Sprintf("No majority in master election: %v", errs), nil)
 	}
 
+	p.instance++
 	p.participantState = state_MASTER
 	return nil
 }
@@ -223,9 +235,23 @@ func (p *Participant) getConnectedClient(m Member) (ConsensusClient, error) {
 	return client, nil
 }
 
+func (p *Participant) forceReconnect(m Member) (ConsensusClient, error) {
+	client, ok := p.participants[m]
+
+	if ok {
+		client.Close()
+		delete(p.participants, m)
+	}
+
+	return p.getConnectedClient(m)
+}
+
 // Local method:
 // Add a member to the cluster that we're the master of. Fails if not master.
 func (p *Participant) AddParticipant(m Member) error {
+	p.Lock()
+	defer p.Unlock()
+
 	if p.participantState != state_MASTER {
 		return NewError(ERR_STATE, "Expected to be MASTER", nil)
 	}
@@ -283,6 +309,9 @@ func (p *Participant) AddParticipant(m Member) error {
 }
 
 func (p *Participant) RemoveParticipant(m Member) error {
+	p.Lock()
+	defer p.Unlock()
+
 	if p.participantState != state_MASTER {
 		return NewError(ERR_STATE, "Expected to be MASTER", nil)
 	}

@@ -14,6 +14,9 @@ func (p *Participant) getMaster() (Member, bool) {
 // From master
 // Asks for a vote for m to become master of instance i.
 func (p *Participant) Prepare(i InstanceNumber, m Member) (InstanceNumber, error) {
+	p.Lock()
+	defer p.Unlock()
+
 	if p.participantState == state_REMOVED || p.participantState == state_UNJOINED {
 		return 0, NewError(ERR_STATE, "Prepare() called on unjoined or removed participant", nil)
 	}
@@ -34,6 +37,9 @@ func (p *Participant) Prepare(i InstanceNumber, m Member) (InstanceNumber, error
 // From master
 // Asks to accept the changes c for round s of instance i.
 func (p *Participant) Accept(i InstanceNumber, s SequenceNumber, c []Change) (bool, error) {
+	p.Lock()
+	defer p.Unlock()
+
 	if p.participantState == state_REMOVED || p.participantState == state_UNJOINED {
 		return false, NewError(ERR_STATE, "Accept() called on unjoined participant", nil)
 	}
@@ -154,6 +160,9 @@ outer:
 // From master
 // Asks to add member m to cluster in instance i, round s.
 func (p *Participant) AddMember(i InstanceNumber, s SequenceNumber, m Member) error {
+	p.Lock()
+	defer p.Unlock()
+
 	if p.participantState == state_REMOVED || p.participantState == state_UNJOINED {
 		return NewError(ERR_STATE, "AddMember() called on removed or unjoined participant", nil)
 	}
@@ -197,6 +206,9 @@ func (p *Participant) AddMember(i InstanceNumber, s SequenceNumber, m Member) er
 // Asks to remove member m in instance i, round s from the cluster. Removes p from cluster
 // if m describes p.
 func (p *Participant) RemoveMember(i InstanceNumber, s SequenceNumber, m Member) error {
+	p.Lock()
+	defer p.Unlock()
+
 	if p.participantState == state_REMOVED || p.participantState == state_UNJOINED {
 		return NewError(ERR_STATE, "RemoveMember() called on removed or unjoined participant", nil)
 	}
@@ -254,6 +266,9 @@ func (p *Participant) removeFromCluster() {
 // Handler
 // Asks p to start participating in a cluster.
 func (p *Participant) StartParticipation(i InstanceNumber, s SequenceNumber, cluster string, self Member, master Member, members []Member, snapshot []byte) error {
+	p.Lock()
+	defer p.Unlock()
+
 	// StartParticipation can be used to re-initialize the state in case some changes were missed
 	if p.participantState != state_UNJOINED && p.participantState != state_PARTICIPANT_CLEAN && p.participantState != state_PARTICIPANT_PENDING {
 		return NewError(ERR_STATE, fmt.Sprintf("Expected state UNJOINED, am in state %d", p.participantState), nil)
