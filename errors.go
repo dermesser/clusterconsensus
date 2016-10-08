@@ -29,7 +29,11 @@ func NewError(code, desc string, inner error) ConsensusError {
 }
 
 func (e ConsensusError) Error() string {
-	return fmt.Sprintf("%s: %s %s", e.errEnum, e.desc, e.inner.Error())
+	if e.inner != nil {
+		return fmt.Sprintf("%s: %s %s", e.errEnum, e.desc, e.inner.Error())
+	} else {
+		return fmt.Sprintf("%s: %s", e.errEnum, e.desc)
+	}
 }
 
 // Whether it makes sense to retry the operation later.
