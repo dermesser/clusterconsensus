@@ -62,10 +62,10 @@ func (t HttpTransport) postRequest(body []byte, method string, target interface{
 		return con.NewError(con.ERR_CALL, fmt.Sprintf("Received HTTP code %d", response.StatusCode), err)
 	}
 
-	blob := bytes.NewBuffer(nil)
+	blob := bytes.Buffer{}
 	_, err = blob.ReadFrom(response.Body)
 
-	if err != nil {
+	if err != nil || blob.Bytes() == nil {
 		return con.NewError(con.ERR_IO, "Couldn't read from body", err)
 	}
 
