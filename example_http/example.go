@@ -114,6 +114,10 @@ func main() {
 			fmt.Println(err)
 		}
 
+		if i%5 == 0 {
+			log.Println(participant.GetState().(State))
+		}
+
 		i++
 	}
 
