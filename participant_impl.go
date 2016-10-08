@@ -48,6 +48,11 @@ func (p *Participant) Accept(i InstanceNumber, s SequenceNumber, c []Change) (bo
 		return false, NewError(ERR_DENIED, fmt.Sprintf("Sequence %d less than current (%d)", s, p.sequence), nil)
 	}
 
+	// This means we missed a requets in the past. We solve this in an easy but inefficient way, by re-starting participation.
+	if s-p.sequence > 1 {
+		return false, NewError(ERR_GAP, fmt.Sprintf("Received seq %d, but current seq is %d", s, p.sequence), nil)
+	}
+
 	// 2., 3.
 	p.commitStagedChanges(i, s)
 
@@ -248,7 +253,8 @@ func (p *Participant) removeFromCluster() {
 // Handler
 // Asks p to start participating in a cluster.
 func (p *Participant) StartParticipation(i InstanceNumber, s SequenceNumber, cluster string, self Member, master Member, members []Member, snapshot []byte) error {
-	if p.participantState != state_UNJOINED {
+	// StartParticipation can be used to re-initialize the state in case some changes were missed
+	if p.participantState != state_UNJOINED && p.participantState != state_PARTICIPANT_CLEAN && p.participantState != state_PARTICIPANT_PENDING {
 		return NewError(ERR_STATE, fmt.Sprintf("Expected state UNJOINED, am in state %d", p.participantState), nil)
 	}
 

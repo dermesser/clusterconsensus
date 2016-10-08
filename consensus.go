@@ -72,6 +72,7 @@ func (p *Participant) submitAsMaster(c []Change) error {
 	errs := []error{}
 
 	// TODO: This can be made asynchronous/concurrently
+	// TODO: Use contexts
 
 	// Send out Accept() requests
 	for _, member := range p.members {
@@ -89,6 +90,18 @@ func (p *Participant) submitAsMaster(c []Change) error {
 
 		if err != nil {
 			errs = append(errs, NewError(ERR_CALL, "Error from remote participant", err))
+
+			// force: re-send snapshot if the client has seen a gap
+			if err.(ConsensusError).Code() == ERR_GAP {
+				client.StartParticipation(p.instance, p.sequence, p.cluster, member, p.self, p.members, p.state.Snapshot())
+
+				ok, err := client.Accept(p.instance, p.sequence+1, c)
+
+				if ok && err == nil {
+					acquiredVotes++
+				}
+			}
+
 			continue
 		}
 		if !ok {
@@ -155,6 +168,7 @@ func (p *Participant) tryBecomeMaster() error {
 	errs := []error{}
 
 	// TODO: This can be made asynchronous/concurrently
+	// TODO: Use contexts
 	for _, member := range p.members {
 		if member == p.self {
 			continue
@@ -230,6 +244,7 @@ func (p *Participant) AddParticipant(m Member) error {
 	errs := []error{}
 
 	// TODO: This can be made asynchronous/concurrently
+	// TODO: Use contexts
 	for _, member := range p.members {
 		if member == p.self {
 			continue
@@ -279,6 +294,7 @@ func (p *Participant) RemoveParticipant(m Member) error {
 			errs := []error{}
 
 			// TODO: This can be made asynchronous/concurrently
+			// TODO: Use contexts
 			for _, member := range p.members {
 				if member == p.self {
 					continue
