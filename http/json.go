@@ -47,11 +47,6 @@ type ChangeMemberRequest struct {
 	Mem      JSONAddress
 }
 
-type ChangeMemberResponse struct {
-	Fail bool
-	Err  JSONErr
-}
-
 type StartParticipationRequest struct {
 	Instance     uint64
 	Sequence     uint64

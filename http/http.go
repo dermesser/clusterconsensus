@@ -131,13 +131,13 @@ func (t HttpTransport) AddMember(i con.InstanceNumber, s con.SequenceNumber, m c
 		return con.NewError(con.ERR_ENCODING, "JSON Encoding error", err)
 	}
 
-	var decoded ChangeMemberResponse
+	var decoded GenericResponse
 
 	if err := t.postRequest(body, method_ADDMEMBER, &decoded); err != nil {
 		return err
 	}
 
-	if decoded.Fail {
+	if !decoded.Accepted {
 		return decoded.Err.ToError()
 	}
 
@@ -151,13 +151,13 @@ func (t HttpTransport) RemoveMember(i con.InstanceNumber, s con.SequenceNumber, 
 		return con.NewError(con.ERR_ENCODING, "JSON Encoding error", err)
 	}
 
-	var decoded ChangeMemberResponse
+	var decoded GenericResponse
 
 	if err := t.postRequest(body, method_RMMEMBER, &decoded); err != nil {
 		return err
 	}
 
-	if decoded.Fail {
+	if !decoded.Accepted {
 		return decoded.Err.ToError()
 	}
 
