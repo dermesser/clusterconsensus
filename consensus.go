@@ -50,6 +50,12 @@ func (p *Participant) SubmitOne(c Change) error {
 // Submit submits a set of changes to the cluster. Returns nil if successful
 // Depending on whether this Participant is currently a Master, this will either replicate the change to all
 // non-master participants or send the change to the master which will then replicate the change.
+//
+// NOTE -- after this returns, the changes are only fully committed on the master. To achieve full
+// commit across all participants, just submit another (set of) change(s), which may be empty.
+// In normal operation, if you submit a stream of changes, any change will be committed durably
+// across the cluster once the consecutive change has been submitted (this design decision has been
+// made for latency/performance reasons)
 func (p *Participant) Submit(c []Change) error {
 	// 1. Check if we're master
 
