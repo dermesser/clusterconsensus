@@ -101,7 +101,7 @@ func main() {
 			participant.AddParticipant(con.Member{Address: a})
 		}
 
-		participant.SubmitOne(Change{t: change_ADD, key: fmt.Sprintf("k%d", 1), val: fmt.Sprintf("val%d", 1)})
+		participant.Submit([]con.Change{})
 	}
 
 	i := 0
