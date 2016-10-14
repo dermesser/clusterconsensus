@@ -108,6 +108,12 @@ func main() {
 	for {
 		time.Sleep(time.Duration(*interval) * time.Second)
 
+		if err := participant.PingMaster(); err != nil {
+			fmt.Println("Master down:", err)
+		} else {
+			fmt.Println("Master is up")
+		}
+
 		err := participant.SubmitOne(Change{t: change_ADD, key: fmt.Sprintf("k%d", i), val: fmt.Sprintf("val%d", i)})
 
 		if err != nil {

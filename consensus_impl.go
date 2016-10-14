@@ -96,17 +96,7 @@ func (p *Participant) submitToRemoteMaster(c []Change) error {
 	// Send to remote master
 	err = masterConn.SubmitRequest(c)
 
-	if err == nil {
-		return nil
-	}
-
-	err = p.tryBecomeMaster()
-
-	if err != nil {
-		return err // We tried everything
-	} else {
-		return p.submitAsMaster(c)
-	}
+	return err
 }
 
 func (p *Participant) tryBecomeMaster() error {

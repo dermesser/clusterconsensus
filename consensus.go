@@ -79,8 +79,16 @@ func (p *Participant) StartElection() error {
 	}
 }
 
+// Sends a no-op to the master and returns nil if the master is up and active.
+func (p *Participant) PingMaster() error {
+	return p.Submit([]Change{})
+}
+
 // Submit one change to the state machine
 func (p *Participant) SubmitOne(c Change) error {
+	if p.IsMaster() {
+		return nil
+	}
 	return p.Submit([]Change{c})
 }
 
@@ -99,7 +107,16 @@ func (p *Participant) Submit(c []Change) error {
 	if p.participantState == state_MASTER {
 		return p.submitAsMaster(c)
 	} else if p.participantState == state_PARTICIPANT_CLEAN || p.participantState == state_PARTICIPANT_PENDING {
-		return p.submitToRemoteMaster(c)
+		err := p.submitToRemoteMaster(c)
+		if err != nil {
+			err = p.tryBecomeMaster()
+
+			if err != nil {
+				return err
+			}
+
+			return p.submitAsMaster(c)
+		}
 	} else if p.participantState == state_CANDIDATE || p.participantState == state_PENDING_MASTER || p.participantState == state_UNJOINED {
 		return NewError(ERR_STATE, "Currently in candidate or unconfirmed-master state; try again later", nil)
 	}
