@@ -8,6 +8,11 @@ func (p *Participant) submitAsMaster(c []Change) error {
 	p.Lock()
 	defer p.Unlock()
 
+	// no-op
+	if len(c) == 0 {
+		return nil
+	}
+
 	// Calculate majority. We ourselves count as accepting.
 	// For 3 members, we need 1 other positive vote; for 5 members, we need 2 other votes
 	requiredVotes := (len(p.members) - 1) / 2
@@ -146,6 +151,11 @@ func (p *Participant) tryBecomeMaster() error {
 	p.master[p.instance] = p.self
 	p.sequence = 0
 	p.participantState = state_MASTER
+
+	if p.eventHandler != nil {
+		p.eventHandler.OnBecomeMaster(p)
+	}
+
 	return nil
 }
 

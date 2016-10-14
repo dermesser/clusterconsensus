@@ -84,6 +84,11 @@ func (p *Participant) PingMaster() error {
 	return p.Submit([]Change{})
 }
 
+// Set the handler for events.
+func (p *Participant) SetEventHandler(eh EventHandler) {
+	p.eventHandler = eh
+}
+
 // Submit one change to the state machine
 func (p *Participant) SubmitOne(c Change) error {
 	if p.IsMaster() {

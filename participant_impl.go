@@ -92,10 +92,15 @@ func (p *Participant) commitStagedChanges(i InstanceNumber, s SequenceNumber) {
 		p.stagedChanges = make(map[SequenceNumber][]Change)
 		p.stagedMembers = make(map[SequenceNumber]Member)
 		p.stagedRemovals = make(map[SequenceNumber]Member)
-		p.participantState = state_PARTICIPANT_CLEAN
 
 		p.sequence = 0
 		p.instance = i
+
+		if p.eventHandler != nil && p.participantState == state_MASTER {
+			p.eventHandler.OnLoseMaster(p)
+		}
+
+		p.participantState = state_PARTICIPANT_CLEAN
 
 		return
 	}
@@ -103,27 +108,27 @@ func (p *Participant) commitStagedChanges(i InstanceNumber, s SequenceNumber) {
 	// 2. If needed, commit previous changes
 
 	for seq := p.sequence; seq < s; seq++ {
-		if seq < s {
-			if changes, ok := p.stagedChanges[seq]; ok {
-				for _, c := range changes {
-					p.state.Apply(c)
-				}
+		if changes, ok := p.stagedChanges[seq]; ok {
+			for _, c := range changes {
+				p.state.Apply(c)
 			}
 		}
+		if p.eventHandler != nil {
+			p.eventHandler.OnCommit(p, s, p.stagedChanges[seq])
+		}
+
 		delete(p.stagedChanges, seq)
 	}
 
 	// 3. and add staged member
 
 	for seq := p.sequence; seq < s; seq++ {
-		if seq < s {
-			if member, ok := p.stagedMembers[seq]; ok {
-				p.members = append(p.members, member)
+		if member, ok := p.stagedMembers[seq]; ok {
+			p.members = append(p.members, member)
 
-				if _, err := p.getConnectedClient(member); err == nil {
-					delete(p.stagedMembers, seq)
-				} // otherwise retry connecting on next accept
-			}
+			if _, err := p.getConnectedClient(member); err == nil {
+				delete(p.stagedMembers, seq)
+			} // otherwise retry connecting on next accept
 		}
 	}
 

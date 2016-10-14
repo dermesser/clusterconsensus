@@ -50,6 +50,17 @@ type Member struct {
 	Address string
 }
 
+type EventHandler interface {
+	OnBecomeMaster(*Participant)
+	OnLoseMaster(*Participant)
+}
+
+// You can embed this into your custom event handler type so you don't have to implement all events.
+type DefaultEventHandler struct{}
+
+func (deh DefaultEventHandler) OnBecomeMaster(*Participant) {}
+func (deh DefaultEventHandler) OnLoseMaster(*Participant)   {}
+
 // One participant of the consensus
 // Implements ConsensusServer
 type Participant struct {
@@ -73,6 +84,8 @@ type Participant struct {
 	stagedRemovals map[SequenceNumber]Member
 
 	connector Connector
+
+	eventHandler EventHandler
 }
 
 // Implemented by Participant

@@ -78,6 +78,16 @@ func (cd ChangeDeserializer) Deserialize(b []byte) con.Change {
 	return Change{t: parts[0], key: parts[1], val: parts[2]}
 }
 
+type EventHandler struct{}
+
+func (eh EventHandler) OnBecomeMaster(*con.Participant) {
+	fmt.Println("BECAME MASTER")
+}
+
+func (eh EventHandler) OnLoseMaster(*con.Participant) {
+	fmt.Println("LOST MASTERSHIP")
+}
+
 func main() {
 	initMaster := flag.Bool("initMaster", false, "Initialize as master, then add others")
 	participants := flag.String("participants", "", "Comma-separated list of other participants' addresses")
@@ -88,6 +98,7 @@ func main() {
 	flag.Parse()
 
 	participant := con.NewParticipant(*cluster, http.NewHttpConnector(3*time.Second), State{inner: make(map[string]string)})
+	participant.SetEventHandler(EventHandler{})
 	server := http.NewHttpConsensusServer()
 
 	server.Register(*cluster, participant, ChangeDeserializer{})
