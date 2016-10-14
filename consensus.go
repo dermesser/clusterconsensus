@@ -38,8 +38,18 @@ func (p *Participant) InitMaster(self Member, snapshot []byte) {
 // This means that the following (exported) functions are supposed to be called from the application that
 // uses the clusterconsensus package.
 
+// Return the current state. Note: This is only the strongly consistent current state if IsMaster() is true.
 func (p *Participant) GetState() State {
 	return p.state
+}
+
+// Returns whether this participant is the current master.
+func (p *Participant) IsMaster() bool {
+	if master, ok := p.master[p.instance]; ok {
+		return p.self == master
+	} else {
+		return false
+	}
 }
 
 // Submit one change to the state machine
@@ -219,6 +229,7 @@ func (p *Participant) tryBecomeMaster() error {
 	}
 
 	p.instance++
+	p.master[p.instance] = p.self
 	p.sequence = 0
 	p.participantState = state_MASTER
 	return nil

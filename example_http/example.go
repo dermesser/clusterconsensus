@@ -115,7 +115,7 @@ func main() {
 		}
 
 		if i%5 == 0 {
-			log.Println(len(participant.GetState().(State).inner), participant.GetState().(State))
+			log.Println("master:", participant.IsMaster(), len(participant.GetState().(State).inner), participant.GetState().(State))
 		}
 
 		i++
