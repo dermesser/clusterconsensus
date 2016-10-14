@@ -1,0 +1,62 @@
+package proto;
+
+message Error {
+    optional string error = 1;
+    optional string type = 2;
+}
+
+message Change {
+    optional bytes change = 1;
+}
+
+message Member {
+    optional string address = 1;
+}
+
+message Version {
+    required uint64 instance = 1;
+    required uint64 sequence = 2;
+}
+
+message GenericResponse {
+    required bool accepted = 1;
+    optional Error error = 2;
+}
+
+message PrepareRequest {
+    required uint64 instance = 1;
+    required Member master = 2;
+}
+
+message PrepareResponse {
+    required uint64 instance = 1;
+    optional Error error = 2;
+}
+
+message AcceptRequest {
+    required Version version = 1;
+    repeated Change changes = 2;
+}
+
+message AddMemberRequest {
+    required Version version = 1;
+    required Member member = 2;
+}
+
+message RemoveMemberRequest {
+    required Version version = 1;
+    required Member member = 2;
+}
+
+message StartParticipation {
+    required Version version = 1;
+    required string cluster = 2;
+    required Member self = 3;
+    required Member master = 4;
+    repeated Member members = 5;
+    required bytes snapshot = 6;
+}
+
+message SubmitRequest {
+    repeated Change changes = 1;
+}
