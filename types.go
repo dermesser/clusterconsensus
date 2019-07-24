@@ -53,6 +53,7 @@ type Member struct {
 type EventHandler interface {
 	OnBecomeMaster(*Participant)
 	OnLoseMaster(*Participant)
+	OnCommit(*Participant, SequenceNumber, []Change)
 }
 
 // You can embed this into your custom event handler type so you don't have to implement all events.
