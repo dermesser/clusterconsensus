@@ -316,7 +316,7 @@ func (p *Participant) StartParticipation(i InstanceNumber, s SequenceNumber, clu
 
 	for _, member := range members {
 		// Try connecting already.
-		go p.getConnectedClient(member)
+		p.getConnectedClient(member)
 	}
 
 	return nil

@@ -1,6 +1,8 @@
 package http
 
 import (
+	"github.com/golang/glog"
+
 	"bytes"
 	con "clusterconsensus"
 	"encoding/json"
@@ -151,6 +153,7 @@ func (h ParticipantHandler) handlePrepare(w http.ResponseWriter, r *http.Request
 		h.sendError(err.(con.ConsensusError), w)
 		return
 	}
+	glog.Info("server: accept:", r.URL.Path, decoded)
 
 	inst, err := h.inner.Prepare(con.InstanceNumber(decoded.Instance), con.Member{Address: decoded.Master.Addr})
 	var result PrepareResponse
@@ -171,6 +174,7 @@ func (h ParticipantHandler) handleAccept(w http.ResponseWriter, r *http.Request)
 		h.sendError(err.(con.ConsensusError), w)
 		return
 	}
+	glog.Info("server: accept:", r.URL.Path, decoded)
 
 	changes := make([]con.Change, len(decoded.Changes))
 
@@ -198,6 +202,7 @@ func (h ParticipantHandler) handleAddMember(w http.ResponseWriter, r *http.Reque
 		h.sendError(err.(con.ConsensusError), w)
 		return
 	}
+	glog.Info("server: add_member:", r.URL.Path, decoded)
 
 	err := h.inner.AddMember(con.InstanceNumber(decoded.Instance), con.SequenceNumber(decoded.Sequence), con.Member{Address: decoded.Mem.Addr})
 
@@ -220,6 +225,7 @@ func (h ParticipantHandler) handleRmMember(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	glog.Info("server: rm_member:", r.URL.Path, decoded)
 	err := h.inner.RemoveMember(con.InstanceNumber(decoded.Instance), con.SequenceNumber(decoded.Sequence), con.Member{Address: decoded.Mem.Addr})
 
 	var result GenericResponse
@@ -241,6 +247,7 @@ func (h ParticipantHandler) handleStart(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	glog.Info("server: start:", r.URL.Path, decoded)
 	participants := make([]con.Member, len(decoded.Participants))
 
 	for i := range decoded.Participants {
@@ -274,6 +281,7 @@ func (h ParticipantHandler) handleSubmit(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	glog.Info("server: submit:", r.URL.Path, decoded)
 	changes := make([]con.Change, len(decoded.Changes))
 
 	for i := range decoded.Changes {

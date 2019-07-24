@@ -10,6 +10,8 @@ import (
 	nhttp "net/http"
 	"strings"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 const (
@@ -38,7 +40,7 @@ func (s State) Snapshot() []byte {
 func (s State) Apply(c con.Change) {
 	chg := c.(Change)
 
-	log.Println("Applying", chg)
+	glog.Info("Applying", chg)
 
 	if chg.t == change_ADD {
 		s.inner[chg.key] = chg.val
@@ -83,17 +85,17 @@ type EventHandler struct{}
 var isMaster bool = false
 
 func (eh EventHandler) OnBecomeMaster(*con.Participant) {
-	fmt.Println("BECAME MASTER")
+	glog.Info("BECAME MASTER")
 	isMaster = true
 }
 
 func (eh EventHandler) OnLoseMaster(*con.Participant) {
-	fmt.Println("LOST MASTERSHIP")
+	glog.Info("LOST MASTERSHIP")
 	isMaster = false
 }
 
 func (eh EventHandler) OnCommit(p *con.Participant, s con.SequenceNumber, chg []con.Change) {
-	fmt.Println("COMMITTED: ", s, chg)
+	glog.Info("COMMITTED: ", s, chg)
 }
 
 func main() {
@@ -128,17 +130,17 @@ func main() {
 		time.Sleep(time.Duration(*interval) * time.Second)
 
 		if isMaster {
-			fmt.Println("<MASTER>")
+			glog.Info("<MASTER>")
 		} else if err := participant.PingMaster(); err != nil {
-			fmt.Println("Master down:", err)
+			glog.Info("Master down:", err)
 		} else {
-			fmt.Println("Master is up")
+			glog.Info("Master is up")
 		}
 
 		err := participant.SubmitOne(Change{t: change_ADD, key: fmt.Sprintf(*addr+"k%d", i), val: fmt.Sprintf("val%d", i)})
 
 		if err != nil {
-			fmt.Println(err)
+			glog.Info(err)
 		}
 
 		if i%5 == 0 {

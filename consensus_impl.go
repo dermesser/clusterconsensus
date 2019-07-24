@@ -92,7 +92,9 @@ func (p *Participant) submitToRemoteMaster(c []Change) error {
 		panic(fmt.Sprintf("Bad instance number - no master: %d/%v", p.instance, p.master))
 	}
 
+	p.Lock()
 	masterConn, err := p.getConnectedClient(master)
+	p.Unlock()
 
 	if err != nil {
 		return err

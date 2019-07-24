@@ -1,6 +1,9 @@
 package clusterconsensus
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/golang/glog"
+)
 
 // Public API of Participant (without the ParticipantStub methods).
 // These methods are typically called locally by an application using this library.
@@ -91,9 +94,6 @@ func (p *Participant) SetEventHandler(eh EventHandler) {
 
 // Submit one change to the state machine
 func (p *Participant) SubmitOne(c Change) error {
-	if p.IsMaster() {
-		return nil
-	}
 	return p.Submit([]Change{c})
 }
 
@@ -112,8 +112,10 @@ func (p *Participant) Submit(c []Change) error {
 	if p.participantState == state_MASTER {
 		return p.submitAsMaster(c)
 	} else if p.participantState == state_PARTICIPANT_CLEAN || p.participantState == state_PARTICIPANT_PENDING {
+		glog.Info("trying to submit to remote master")
 		err := p.submitToRemoteMaster(c)
 		if err != nil {
+			glog.Info("submit failed, trying election")
 			err = p.tryBecomeMaster()
 
 			if err != nil {
