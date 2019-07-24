@@ -306,16 +306,17 @@ func (p *Participant) StartParticipation(i InstanceNumber, s SequenceNumber, clu
 	p.sequence = s
 	p.state.Install(snapshot)
 
-	if len(members) == 1 && members[0] == master {
+	if self == master {
 		// Bootstrapped externally
 		p.participantState = state_MASTER
+		p.eventHandler.OnBecomeMaster(p)
 	} else {
 		p.participantState = state_PARTICIPANT_CLEAN
 	}
 
 	for _, member := range members {
 		// Try connecting already.
-		p.getConnectedClient(member)
+		go p.getConnectedClient(member)
 	}
 
 	return nil
