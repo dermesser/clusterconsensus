@@ -80,18 +80,26 @@ func (cd ChangeDeserializer) Deserialize(b []byte) con.Change {
 
 type EventHandler struct{}
 
+var isMaster bool = false
+
 func (eh EventHandler) OnBecomeMaster(*con.Participant) {
 	fmt.Println("BECAME MASTER")
+	isMaster = true
 }
 
 func (eh EventHandler) OnLoseMaster(*con.Participant) {
 	fmt.Println("LOST MASTERSHIP")
+	isMaster = false
+}
+
+func (eh EventHandler) OnCommit(p *con.Participant, s con.SequenceNumber, chg []con.Change) {
+	fmt.Println("COMMITTED: ", s, chg)
 }
 
 func main() {
 	initMaster := flag.Bool("initMaster", false, "Initialize as master, then add others")
 	participants := flag.String("participants", "", "Comma-separated list of other participants' addresses")
-	addr := flag.String("listen", "localhost:9000", "Address to listen on")
+	addr := flag.String("listen", ":9000", "Address to listen on")
 	cluster := flag.String("cluster", "cluster1", "ClusterID")
 	interval := flag.Uint("interval", 2, "interval for submitting random changes")
 
@@ -109,7 +117,7 @@ func main() {
 
 		for _, a := range strings.Split(*participants, ",") {
 			log.Println("Adding", a)
-			participant.AddParticipant(con.Member{Address: a})
+			participant.AddParticipant(con.Member{Address: "http://" + a})
 		}
 
 		participant.Submit([]con.Change{})
@@ -119,13 +127,15 @@ func main() {
 	for {
 		time.Sleep(time.Duration(*interval) * time.Second)
 
-		if err := participant.PingMaster(); err != nil {
+		if isMaster {
+			fmt.Println("<MASTER>")
+		} else if err := participant.PingMaster(); err != nil {
 			fmt.Println("Master down:", err)
 		} else {
 			fmt.Println("Master is up")
 		}
 
-		err := participant.SubmitOne(Change{t: change_ADD, key: fmt.Sprintf("k%d", i), val: fmt.Sprintf("val%d", i)})
+		err := participant.SubmitOne(Change{t: change_ADD, key: fmt.Sprintf(*addr+"k%d", i), val: fmt.Sprintf("val%d", i)})
 
 		if err != nil {
 			fmt.Println(err)
