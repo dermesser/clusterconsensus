@@ -1,3 +1,4 @@
+syntax = "proto2";
 package proto;
 
 message Error {
@@ -21,11 +22,13 @@ message Version {
 message GenericResponse {
     required bool accepted = 1;
     optional Error error = 2;
+    optional uint64 instance = 3;
 }
 
 message PrepareRequest {
     required uint64 instance = 1;
     required Member master = 2;
+    required string cluster = 3;
 }
 
 message PrepareResponse {
@@ -36,16 +39,19 @@ message PrepareResponse {
 message AcceptRequest {
     required Version version = 1;
     repeated Change changes = 2;
+    required string cluster = 3;
 }
 
 message AddMemberRequest {
     required Version version = 1;
     required Member member = 2;
+    required string cluster = 3;
 }
 
 message RemoveMemberRequest {
     required Version version = 1;
     required Member member = 2;
+    required string cluster = 3;
 }
 
 message StartParticipation {
@@ -59,4 +65,5 @@ message StartParticipation {
 
 message SubmitRequest {
     repeated Change changes = 1;
+    required string cluster = 2;
 }

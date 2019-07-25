@@ -26,6 +26,7 @@ func NewHttpConsensusServer() HttpConsensusServer {
 	return HttpConsensusServer{participants: make(map[string]con.ConsensusServer), mux: http.NewServeMux()}
 }
 
+// Register initializes a new cluster on this server. stub is a Participant instance used by your application.
 func (srv HttpConsensusServer) Register(cluster string, stub con.ConsensusServer, decoder con.ChangeDeserializer) error {
 	if _, ok := srv.participants[cluster]; ok {
 		return con.NewError(con.ERR_STATE, fmt.Sprintf("Server is already part of cluster %s", cluster), nil)
@@ -204,7 +205,8 @@ func (h ParticipantHandler) handleAddMember(w http.ResponseWriter, r *http.Reque
 	}
 	glog.Info("server: add_member:", r.URL.Path, decoded)
 
-	err := h.inner.AddMember(con.InstanceNumber(decoded.Instance), con.SequenceNumber(decoded.Sequence), con.Member{Address: decoded.Mem.Addr})
+	err := h.inner.AddMember(con.InstanceNumber(decoded.Instance), con.SequenceNumber(decoded.Sequence),
+		con.Member{Address: decoded.Mem.Addr})
 
 	var result GenericResponse
 

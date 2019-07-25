@@ -140,11 +140,12 @@ func main() {
 		err := participant.SubmitOne(Change{t: change_ADD, key: fmt.Sprintf(*addr+"k%d", i), val: fmt.Sprintf("val%d", i)})
 
 		if err != nil {
-			glog.Info(err)
+			glog.Info("couldn't submit change:", err)
 		}
 
 		if i%5 == 0 {
-			log.Println("master:", participant.IsMaster(), len(participant.GetState().(State).inner), participant.GetState().(State))
+			log.Println("master:", participant.IsMaster(), len(participant.GetState().(State).inner),
+				participant.GetState().(State))
 		}
 
 		i++
