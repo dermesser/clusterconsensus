@@ -112,10 +112,10 @@ func (p *Participant) Submit(c []Change) error {
 	if p.participantState == state_MASTER {
 		return p.submitAsMaster(c)
 	} else if p.participantState == state_PARTICIPANT_CLEAN || p.participantState == state_PARTICIPANT_PENDING {
-		glog.Info("trying to submit to remote master")
+		glog.Info("trying to submit to remote master ", p.master[p.instance])
 		err := p.submitToRemoteMaster(c)
 		if err != nil {
-			glog.Info("submit failed, trying election")
+			glog.Info("submit failed, trying election: ", err)
 			err = p.tryBecomeMaster()
 
 			if err != nil {
@@ -167,7 +167,9 @@ func (p *Participant) AddParticipant(m Member) error {
 			continue
 		}
 
+		p.Unlock()
 		err = client.AddMember(p.instance, p.sequence+1, m)
+		p.Lock()
 
 		if err != nil {
 			errs = append(errs, NewError(ERR_CALL, fmt.Sprintf("Error calling Prepare() on %v", member), err))
@@ -190,7 +192,10 @@ func (p *Participant) AddParticipant(m Member) error {
 		return NewError(ERR_CALL, fmt.Sprintf("Couldn't call StartParticipation() on %v", m), err)
 	}
 
-	return client.StartParticipation(p.instance, p.sequence, p.cluster, m, p.self, p.members, p.state.Snapshot())
+	p.Unlock()
+	err = client.StartParticipation(p.instance, p.sequence, p.cluster, m, p.self, p.members, p.state.Snapshot())
+	p.Lock()
+	return err
 }
 
 func (p *Participant) RemoveParticipant(m Member) error {
@@ -221,7 +226,9 @@ func (p *Participant) RemoveParticipant(m Member) error {
 					continue
 				}
 
+				p.Unlock()
 				err = client.RemoveMember(p.instance, p.sequence+1, m)
+				p.Lock()
 
 				if err != nil {
 					errs = append(errs, NewError(ERR_CALL, fmt.Sprintf("Error calling RemoveMember() on %v", member), nil))

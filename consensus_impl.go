@@ -1,6 +1,8 @@
 package clusterconsensus
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // methods that are only used by public methods on Participant.
 
@@ -34,7 +36,9 @@ func (p *Participant) submitAsMaster(c []Change) error {
 			return err
 		}
 
+		p.Unlock()
 		ok, err := client.Accept(p.instance, p.sequence+1, c)
+		p.Lock()
 
 		if err != nil {
 			errs = append(errs, NewError(ERR_CALL, "Error from remote participant", err))
@@ -45,9 +49,14 @@ func (p *Participant) submitAsMaster(c []Change) error {
 			p.forceReconnect(member)
 
 			// Especially useful to solve ERR_STATE, ERR_GAP errors
-			client.StartParticipation(p.instance, p.sequence, p.cluster, member, p.self, p.members, p.state.Snapshot())
-
+			p.Unlock()
+			err = client.StartParticipation(p.instance, p.sequence, p.cluster, member, p.self, p.members, p.state.Snapshot())
+			if err != nil {
+				p.Lock()
+				return err
+			}
 			ok, err := client.Accept(p.instance, p.sequence+1, c)
+			p.Lock()
 
 			if ok && err == nil {
 				acquiredVotes++

@@ -1,6 +1,10 @@
 package clusterconsensus
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/golang/glog"
+)
 
 // This file contains methods on Participant to implement ParticipantStub. They are generally invoked
 // by a clusterconsensus.Server, i.e. on request by a remote participant (including masters).
@@ -22,7 +26,6 @@ func (p *Participant) Prepare(i InstanceNumber, m Member) (InstanceNumber, error
 	}
 
 	// 1. instance must be greater than current
-
 	if i > p.instance {
 		// Stage current master. The master will be set once we receive an Accept() with this instance number.
 		p.master[i] = m
@@ -93,6 +96,7 @@ func (p *Participant) commitStagedChanges(i InstanceNumber, s SequenceNumber) {
 		p.stagedMembers = make(map[SequenceNumber]Member)
 		p.stagedRemovals = make(map[SequenceNumber]Member)
 
+		glog.Info("LOST MASTERSHIP (part_impl) ", i, p.instance, p.participantState)
 		p.sequence = 0
 		p.instance = i
 
@@ -324,8 +328,6 @@ func (p *Participant) StartParticipation(i InstanceNumber, s SequenceNumber, clu
 
 // RPC handler, not to be used locally. Only valid to be called on a master.
 func (p *Participant) SubmitRequest(c []Change) error {
-	// *Assert* that we're master
-
 	if p.participantState != state_MASTER {
 		return NewError(ERR_STATE, "Can't request changes to be submitted on non-master", nil)
 	} else {

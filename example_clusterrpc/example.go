@@ -25,6 +25,10 @@ const (
 	SERVICE = "Consensus"
 )
 
+var (
+	CLIENT_ID string = "_default"
+)
+
 type Connector struct {
 }
 
@@ -48,7 +52,8 @@ func (c *Connector) Connect(cluster string, m con.Member) (con.ConsensusClient, 
 		glog.Error("connect failed: ", err)
 		return nil, err
 	}
-	cl := rpccl.New(addr, ch)
+	cl := rpccl.New(CLIENT_ID, ch)
+	cl.SetTimeout(1500*time.Millisecond, true)
 	return &client{cl: &cl, host: addr, cluster: cluster}, nil
 }
 
@@ -57,9 +62,14 @@ func (c *client) Close() error {
 }
 
 func (c *client) Prepare(i con.InstanceNumber, m con.Member) (con.InstanceNumber, error) {
+	glog.Info("Prepare sent to ", c.host)
 	req := proto.PrepareRequest{Instance: pb.Uint64(uint64(i)),
 		Master: &proto.Member{Address: pb.String(m.Address)}, Cluster: pb.String(c.cluster)}
-	resp := c.cl.NewRequest(SERVICE, "Prepare").GoProto(&req)
+	rpcReq := c.cl.NewRequest(SERVICE, "Prepare")
+	if rpcReq == nil {
+		return 0, errors.New("request is in progress")
+	}
+	resp := rpcReq.GoProto(&req)
 	if !resp.Ok() {
 		return 0, errors.New(resp.Error())
 	}
@@ -71,6 +81,7 @@ func (c *client) Prepare(i con.InstanceNumber, m con.Member) (con.InstanceNumber
 }
 
 func (c *client) Accept(i con.InstanceNumber, s con.SequenceNumber, chgs []con.Change) (bool, error) {
+	glog.Info("Accept sent to ", c.host)
 	version := &proto.Version{Instance: pb.Uint64(uint64(i)), Sequence: pb.Uint64(uint64(s))}
 	changes := make([]*proto.Change, len(chgs))
 	for i := range chgs {
@@ -78,7 +89,11 @@ func (c *client) Accept(i con.InstanceNumber, s con.SequenceNumber, chgs []con.C
 	}
 	req := proto.AcceptRequest{Version: version, Changes: changes, Cluster: pb.String(c.cluster)}
 
-	resp := c.cl.NewRequest(SERVICE, "Accept").GoProto(&req)
+	rpcReq := c.cl.NewRequest(SERVICE, "Accept")
+	if rpcReq == nil {
+		return false, errors.New("request is in progress")
+	}
+	resp := rpcReq.GoProto(&req)
 	if !resp.Ok() {
 		return false, errors.New(resp.Error())
 	}
@@ -95,7 +110,11 @@ func (c *client) Accept(i con.InstanceNumber, s con.SequenceNumber, chgs []con.C
 func (c *client) AddMember(i con.InstanceNumber, s con.SequenceNumber, m con.Member) error {
 	version := &proto.Version{Instance: pb.Uint64(uint64(i)), Sequence: pb.Uint64(uint64(s))}
 	req := &proto.AddMemberRequest{Version: version, Member: &proto.Member{Address: &m.Address}, Cluster: &c.cluster}
-	resp := c.cl.NewRequest(SERVICE, "AddMember").GoProto(req)
+	rpcReq := c.cl.NewRequest(SERVICE, "AddMember")
+	if rpcReq == nil {
+		return errors.New("request is in progress")
+	}
+	resp := rpcReq.GoProto(req)
 	if !resp.Ok() {
 		return errors.New(resp.Error())
 	}
@@ -112,7 +131,11 @@ func (c *client) AddMember(i con.InstanceNumber, s con.SequenceNumber, m con.Mem
 func (c *client) RemoveMember(i con.InstanceNumber, s con.SequenceNumber, m con.Member) error {
 	version := &proto.Version{Instance: pb.Uint64(uint64(i)), Sequence: pb.Uint64(uint64(s))}
 	req := &proto.RemoveMemberRequest{Version: version, Member: &proto.Member{Address: &m.Address}, Cluster: &c.cluster}
-	resp := c.cl.NewRequest(SERVICE, "RemoveMember").GoProto(req)
+	rpcReq := c.cl.NewRequest(SERVICE, "RemoveMember")
+	if rpcReq == nil {
+		return errors.New("request is in progress")
+	}
+	resp := rpcReq.GoProto(req)
 	if !resp.Ok() {
 		return errors.New(resp.Error())
 	}
@@ -133,6 +156,8 @@ func (c *client) StartParticipation(i con.InstanceNumber,
 	master con.Member,
 	members []con.Member,
 	snapshot []byte) error {
+	glog.Info("StartParticipation sent to ", self.Address)
+
 	participants := make([]*proto.Member, len(members))
 	for i := range members {
 		participants[i] = &proto.Member{Address: &members[i].Address}
@@ -141,11 +166,15 @@ func (c *client) StartParticipation(i con.InstanceNumber,
 		Version:  &proto.Version{Instance: pb.Uint64(uint64(i)), Sequence: pb.Uint64(uint64(s))},
 		Cluster:  &c.cluster,
 		Self:     &proto.Member{Address: &self.Address},
-		Master:   &proto.Member{Address: &self.Address},
+		Master:   &proto.Member{Address: &master.Address},
 		Members:  participants,
 		Snapshot: snapshot}
 	var respMsg proto.GenericResponse
-	resp := c.cl.NewRequest(SERVICE, "StartParticipation").GoProto(req)
+	rpcReq := c.cl.NewRequest(SERVICE, "StartParticipation")
+	if rpcReq == nil {
+		return errors.New("request is in progress")
+	}
+	resp := rpcReq.GoProto(req)
 	if !resp.Ok() {
 		return errors.New(resp.Error())
 	}
@@ -157,13 +186,19 @@ func (c *client) StartParticipation(i con.InstanceNumber,
 }
 
 func (c *client) SubmitRequest(chg []con.Change) error {
+	glog.Info("Submitting ", len(chg), " changes to ", c.host)
+
 	changes := make([]*proto.Change, len(chg))
 	for i := range chg {
 		changes[i] = &proto.Change{Change: chg[i].Serialize()}
 	}
 	req := &proto.SubmitRequest{Cluster: &c.cluster, Changes: changes}
 	var respMsg proto.GenericResponse
-	resp := c.cl.NewRequest(SERVICE, "Submit").GoProto(req)
+	rpcReq := c.cl.NewRequest(SERVICE, "Submit")
+	if rpcReq == nil {
+		return errors.New("request is in progress")
+	}
+	resp := rpcReq.GoProto(req)
 	if !resp.Ok() {
 		return errors.New(resp.Error())
 	}
@@ -293,7 +328,7 @@ func (srv *RpcServer) handlePrepare(ctx *rpcsrv.Context) {
 		return
 	}
 
-	glog.Info("server: prepare:", req.String())
+	glog.Info("server: prepare:", req.String(), " by ", ctx.GetClientId())
 	inst, err := inner.Prepare(con.InstanceNumber(req.GetInstance()), con.Member{Address: req.GetMaster().GetAddress()})
 	if err != nil {
 		glog.Error("couldn't prepare:", err)
@@ -326,7 +361,7 @@ func (srv *RpcServer) handleAccept(ctx *rpcsrv.Context) {
 		return
 	}
 
-	glog.Info("server: accept:", req.String())
+	glog.Info("server: accept:", req.String(), " by ", ctx.GetClientId())
 	changes := make([]con.Change, len(req.GetChanges()))
 	for i, c := range req.GetChanges() {
 		changes[i] = ChangeDeserializer{}.Deserialize(c.GetChange())
@@ -357,7 +392,7 @@ func (srv *RpcServer) handleAddMember(ctx *rpcsrv.Context) {
 		return
 	}
 
-	glog.Info("server: addmember:", req.String())
+	glog.Info("server: addmember:", req.String(), " by ", ctx.GetClientId())
 	err := inner.AddMember(con.InstanceNumber(req.GetVersion().GetInstance()), con.SequenceNumber(req.GetVersion().GetSequence()),
 		con.Member{Address: req.GetMember().GetAddress()})
 	if err != nil {
@@ -384,7 +419,7 @@ func (srv *RpcServer) handleRmMember(ctx *rpcsrv.Context) {
 		return
 	}
 
-	glog.Info("server: rmmember:", req.String())
+	glog.Info("server: rmmember:", req.String(), " by ", ctx.GetClientId())
 	err := inner.RemoveMember(con.InstanceNumber(req.GetVersion().GetInstance()), con.SequenceNumber(req.GetVersion().GetSequence()),
 		con.Member{Address: req.GetMember().GetAddress()})
 	if err != nil {
@@ -417,7 +452,7 @@ func (srv *RpcServer) handleStart(ctx *rpcsrv.Context) {
 		participants[i] = con.Member{Address: req.GetMembers()[i].GetAddress()}
 	}
 
-	glog.Info("server: start:", req.String())
+	glog.Info("server: start:", req.String(), " by ", ctx.GetClientId())
 	err := inner.StartParticipation(con.InstanceNumber(req.GetVersion().GetInstance()),
 		con.SequenceNumber(req.GetVersion().GetSequence()),
 		req.GetCluster(),
@@ -450,7 +485,7 @@ func (srv *RpcServer) handleSubmit(ctx *rpcsrv.Context) {
 		return
 	}
 
-	glog.Info("server: submit:", req.String())
+	glog.Info("server: submit: ", req.String(), " by ", ctx.GetClientId())
 
 	changes := make([]con.Change, len(req.GetChanges()))
 	for i := range req.GetChanges() {
@@ -483,7 +518,10 @@ func main() {
 	port := flag.Uint("listen", 9000, "Port to listen on")
 	cluster := flag.String("cluster", "cluster1", "ClusterID")
 	interval := flag.Uint("interval", 2, "interval for submitting random changes")
+
 	flag.Parse()
+
+	CLIENT_ID = fmt.Sprintf("<client:%s:%d>", *host, *port)
 
 	glog.Info("setting up server")
 	server, err := NewRpcServer(*host, *port)
@@ -501,7 +539,7 @@ func main() {
 		addr := fmt.Sprintf("%s:%d", *host, *port)
 		participant.InitMaster(con.Member{Address: addr}, []byte{})
 		for _, a := range strings.Split(*participants, ",") {
-			glog.Info("Adding member", a)
+			glog.Info("Adding member ", a)
 			fmt.Println("AddMember err? ", participant.AddParticipant(con.Member{Address: a}))
 		}
 		participant.Submit([]con.Change{})
@@ -525,8 +563,8 @@ func main() {
 			glog.Info("couldn't submit change:", err)
 		}
 		if i%5 == 0 {
-			glog.Info("master? ", participant.IsMaster(), "state len: ", len(participant.GetState().(State).inner),
-				"state: ", participant.GetState().(State))
+			glog.Info("master? ", participant.IsMaster(), " state len: ", len(participant.GetState().(State).inner),
+				" state: ", participant.GetState().(State))
 		}
 		i++
 	}
