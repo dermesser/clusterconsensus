@@ -9,6 +9,7 @@ import (
 	"log"
 	nhttp "net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -21,10 +22,13 @@ const (
 
 // Simple state machine
 type State struct {
+	sync.Mutex
 	inner map[string]string
 }
 
-func (s State) Snapshot() []byte {
+func (s *State) Snapshot() []byte {
+	s.Lock()
+	defer s.Unlock()
 	buf := bytes.NewBuffer(nil)
 
 	for k, v := range s.inner {
@@ -37,7 +41,9 @@ func (s State) Snapshot() []byte {
 	return buf.Bytes()
 }
 
-func (s State) Apply(c con.Change) {
+func (s *State) Apply(c con.Change) {
+	s.Lock()
+	defer s.Unlock()
 	chg := c.(Change)
 
 	glog.Info("Applying", chg)
@@ -49,7 +55,9 @@ func (s State) Apply(c con.Change) {
 	}
 }
 
-func (s State) Install(ss []byte) {
+func (s *State) Install(ss []byte) {
+	s.Lock()
+	defer s.Unlock()
 	parts := strings.Split(string(ss), "×")
 
 	for i := 0; i < len(parts)-1; {
@@ -107,7 +115,7 @@ func main() {
 
 	flag.Parse()
 
-	participant := con.NewParticipant(*cluster, http.NewHttpConnector(3*time.Second), State{inner: make(map[string]string)})
+	participant := con.NewParticipant(*cluster, http.NewHttpConnector(3*time.Second), &State{inner: make(map[string]string)})
 	participant.SetEventHandler(EventHandler{})
 	server := http.NewHttpConsensusServer()
 
@@ -141,11 +149,14 @@ func main() {
 
 		if err != nil {
 			glog.Info("couldn't submit change:", err)
+			continue
 		}
 
 		if i%5 == 0 {
-			log.Println("master:", participant.IsMaster(), len(participant.GetState().(State).inner),
-				participant.GetState().(State))
+			participant.Lock()
+			glog.Info("master: ", participant.IsMaster(), " state len: ", len(participant.GetState().(*State).inner),
+				" state: ", participant.GetState().(*State))
+			participant.Unlock()
 		}
 
 		i++
