@@ -74,8 +74,9 @@ type Participant struct {
 
 	participants map[Member]ConsensusClient
 
-	instance InstanceNumber // nth round
-	sequence SequenceNumber // nth submission in this round
+	instance      InstanceNumber // nth round
+	sequence      SequenceNumber // nth submission in this round
+	failedSubmits int
 
 	state            State
 	participantState int // See state_... constants

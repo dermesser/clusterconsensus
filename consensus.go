@@ -115,6 +115,12 @@ func (p *Participant) Submit(c []Change) error {
 		glog.Info("trying to submit to remote master ", p.master[p.instance])
 		err := p.submitToRemoteMaster(c)
 		if err != nil {
+			p.failedSubmits++
+			if p.failedSubmits < 3 {
+				return err
+			}
+
+			p.failedSubmits = 0
 			glog.Info("submit failed, trying election: ", err)
 			err = p.tryBecomeMaster()
 

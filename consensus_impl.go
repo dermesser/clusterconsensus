@@ -2,6 +2,9 @@ package clusterconsensus
 
 import (
 	"fmt"
+	"sync"
+
+	"github.com/golang/glog"
 )
 
 // methods that are only used by public methods on Participant.
@@ -19,57 +22,81 @@ func (p *Participant) submitAsMaster(c []Change) error {
 	// For 3 members, we need 1 other positive vote; for 5 members, we need 2 other votes
 	requiredVotes := (len(p.members) - 1) / 2
 	acquiredVotes := 0
+	failedVotes := 0
 	errs := []error{}
 
-	// TODO: This can be made asynchronous/concurrently
 	// TODO: Use contexts
 
+	var localMx sync.Mutex
+	wait := make(chan bool, requiredVotes)
+
+	p.Unlock()
 	// Send out Accept() requests
 	for _, member := range p.members {
 		if member == p.self {
 			continue
 		}
 
+		p.Lock()
 		client, err := p.getConnectedClient(member)
-
+		p.Unlock()
 		if err != nil {
 			return err
 		}
 
-		p.Unlock()
-		ok, err := client.Accept(p.instance, p.sequence+1, c)
-		p.Lock()
-
-		if err != nil {
-			errs = append(errs, NewError(ERR_CALL, "Error from remote participant", err))
-
-			// force: re-send snapshot if the client has seen a gap
-
-			// Useful to solve generic network errors
-			p.forceReconnect(member)
-
-			// Especially useful to solve ERR_STATE, ERR_GAP errors
-			p.Unlock()
-			err = client.StartParticipation(p.instance, p.sequence, p.cluster, member, p.self, p.members, p.state.Snapshot())
-			if err != nil {
-				p.Lock()
-				return err
-			}
+		go func() {
+			member := member
 			ok, err := client.Accept(p.instance, p.sequence+1, c)
-			p.Lock()
 
-			if ok && err == nil {
-				acquiredVotes++
+			if err != nil {
+				glog.Error("client ", member, " did not accept: ", err)
+				localMx.Lock()
+				errs = append(errs, NewError(ERR_CALL, "Error from remote participant", err))
+				localMx.Unlock()
+
+				// force: re-send snapshot if the client has seen a gap
+
+				// Useful to solve generic network errors
+				p.forceReconnect(member)
+
+				// Especially useful to solve ERR_STATE, ERR_GAP errors
+				err = client.StartParticipation(p.instance, p.sequence, p.cluster, member, p.self, p.members, p.state.Snapshot())
+				if err != nil {
+					glog.Error(member, ": Couldn't force-add client after failed Accept: ", err)
+					wait <- false
+					return
+				}
+				ok, err := client.Accept(p.instance, p.sequence+1, c)
+				if ok && err == nil {
+					wait <- true
+					return
+				}
 			}
+			if !ok {
+				localMx.Lock()
+				errs = append(errs, NewError(ERR_DENIED, "Vote denied", nil))
+				localMx.Unlock()
+				wait <- false
+				return
+			}
+			wait <- true
+		}()
+	}
+	p.Lock()
 
-			continue
+loop:
+	for {
+		select {
+		case b := <-wait:
+			if b {
+				acquiredVotes++
+			} else {
+				failedVotes++
+			}
+			if acquiredVotes >= requiredVotes {
+				break loop
+			}
 		}
-		if !ok {
-			errs = append(errs, NewError(ERR_DENIED, "Vote denied", nil))
-			continue
-		}
-
-		acquiredVotes++
 	}
 
 	if acquiredVotes >= requiredVotes {
@@ -102,7 +129,7 @@ func (p *Participant) submitToRemoteMaster(c []Change) error {
 	}
 
 	p.Lock()
-	masterConn, err := p.getConnectedClient(master)
+	client, err := p.getConnectedClient(master)
 	p.Unlock()
 
 	if err != nil {
@@ -110,7 +137,7 @@ func (p *Participant) submitToRemoteMaster(c []Change) error {
 	}
 
 	// Send to remote master
-	err = masterConn.SubmitRequest(c)
+	err = client.SubmitRequest(c)
 
 	return err
 }
@@ -140,7 +167,9 @@ func (p *Participant) tryBecomeMaster() error {
 			continue
 		}
 
+		p.Unlock()
 		newInstance, err := client.Prepare(p.instance+1, p.self)
+		p.Lock()
 
 		if err != nil {
 			errs = append(errs, NewError(ERR_CALL, fmt.Sprintf("Error calling Prepare() on %v", member), err))

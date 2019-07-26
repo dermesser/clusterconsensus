@@ -81,7 +81,8 @@ func (c *client) Prepare(i con.InstanceNumber, m con.Member) (con.InstanceNumber
 }
 
 func (c *client) Accept(i con.InstanceNumber, s con.SequenceNumber, chgs []con.Change) (bool, error) {
-	glog.Info("Accept sent to ", c.host)
+	glog.Info("Accept ", i, s, " sent to ", c.host)
+	defer glog.Info("Accept ", i, s, " to ", c.host, " finished")
 	version := &proto.Version{Instance: pb.Uint64(uint64(i)), Sequence: pb.Uint64(uint64(s))}
 	changes := make([]*proto.Change, len(chgs))
 	for i := range chgs {
@@ -95,6 +96,7 @@ func (c *client) Accept(i con.InstanceNumber, s con.SequenceNumber, chgs []con.C
 	}
 	resp := rpcReq.GoProto(&req)
 	if !resp.Ok() {
+		glog.Error(c.host, ": RPC error: ", resp.Error())
 		return false, errors.New(resp.Error())
 	}
 	var respMsg proto.GenericResponse
@@ -102,6 +104,7 @@ func (c *client) Accept(i con.InstanceNumber, s con.SequenceNumber, chgs []con.C
 		return false, err
 	}
 	if respMsg.GetError() != nil {
+		glog.Error(c.host, ": Consensus error: ", resp.Error())
 		return false, errors.New(respMsg.GetError().GetError())
 	}
 	return true, nil
@@ -272,16 +275,12 @@ func (cd ChangeDeserializer) Deserialize(b []byte) con.Change {
 
 type EventHandler struct{}
 
-var isMaster bool = false
-
 func (eh EventHandler) OnBecomeMaster(*con.Participant) {
 	glog.Info("BECAME MASTER")
-	isMaster = true
 }
 
 func (eh EventHandler) OnLoseMaster(*con.Participant) {
 	glog.Info("LOST MASTERSHIP")
-	isMaster = false
 }
 
 func (eh EventHandler) OnCommit(p *con.Participant, s con.SequenceNumber, chg []con.Change) {
@@ -494,7 +493,7 @@ func (srv *RpcServer) handleSubmit(ctx *rpcsrv.Context) {
 
 	err := inner.SubmitRequest(changes)
 	if err != nil {
-		glog.Error("couldn't submit:", err)
+		glog.Error("server: couldn't submit: ", err)
 		ctx.Fail("couldn't submit")
 		return
 	}
@@ -549,7 +548,7 @@ func main() {
 	for {
 		time.Sleep(time.Duration(*interval) * time.Second)
 
-		if isMaster {
+		if participant.IsMaster() {
 			glog.Info("<MASTER>")
 		} else if err := participant.PingMaster(); err != nil {
 			glog.Info("<Follower> Master down:", err)
@@ -561,6 +560,7 @@ func main() {
 			Change{t: change_ADD, key: fmt.Sprintf("%d.k%d", *port, i), val: fmt.Sprintf("v%d", i)})
 		if err != nil {
 			glog.Info("couldn't submit change:", err)
+			continue
 		}
 		if i%5 == 0 {
 			glog.Info("master? ", participant.IsMaster(), " state len: ", len(participant.GetState().(State).inner),
