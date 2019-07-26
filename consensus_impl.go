@@ -49,9 +49,9 @@ func (p *Participant) submitAsMaster(c []Change) error {
 		go func() {
 			ok, err := client.Accept(p.instance, p.sequence+1, c)
 			if err != nil {
-				p.failedAccepts[member] = p.failedAccepts[member] + 1
 				glog.Error("client ", member, " did not accept: ", err)
 				localMx.Lock()
+				p.failedAccepts[member] = p.failedAccepts[member] + 1
 				errs = append(errs, NewError(ERR_CALL, "Error from remote participant", err))
 				localMx.Unlock()
 
@@ -60,12 +60,15 @@ func (p *Participant) submitAsMaster(c []Change) error {
 				// Useful to solve generic network errors
 				p.forceReconnect(member)
 
+				localMx.Lock()
 				if p.failedAccepts[member] < 3 {
 					glog.Info("delaying re-initialization for ", member, ": ", p.failedAccepts[member])
+					localMx.Unlock()
 					wait <- false
 					return
 				}
 				p.failedAccepts[member] = 0
+				localMx.Unlock()
 				// Especially useful to solve ERR_STATE, ERR_GAP errors
 				err = client.StartParticipation(p.instance, p.sequence, p.cluster, member, p.self, p.members, p.state.Snapshot())
 				if err != nil {
@@ -79,7 +82,9 @@ func (p *Participant) submitAsMaster(c []Change) error {
 					return
 				}
 			}
+			localMx.Lock()
 			p.failedAccepts[member] = 0
+			localMx.Unlock()
 			if !ok {
 				localMx.Lock()
 				errs = append(errs, NewError(ERR_DENIED, "Vote denied", nil))
