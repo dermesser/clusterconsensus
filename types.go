@@ -77,6 +77,7 @@ type Participant struct {
 	instance      InstanceNumber // nth round
 	sequence      SequenceNumber // nth submission in this round
 	failedSubmits int
+	failedAccepts map[Member]int
 
 	state            State
 	participantState int // See state_... constants

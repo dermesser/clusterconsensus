@@ -24,6 +24,7 @@ func NewParticipant(cluster string, connector Connector, initialState State) *Pa
 		sequence: 0,
 
 		failedSubmits: 0,
+		failedAccepts: make(map[Member]int),
 
 		state:            initialState,
 		participantState: state_UNJOINED,
