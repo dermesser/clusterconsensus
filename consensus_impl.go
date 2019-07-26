@@ -44,8 +44,8 @@ func (p *Participant) submitAsMaster(c []Change) error {
 			return err
 		}
 
+		member := member
 		go func() {
-			member := member
 			ok, err := client.Accept(p.instance, p.sequence+1, c)
 
 			if err != nil {
