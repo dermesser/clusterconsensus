@@ -71,6 +71,7 @@ func (c *client) Prepare(i con.InstanceNumber, m con.Member) (con.InstanceNumber
 	}
 	resp := rpcReq.GoProto(&req)
 	if !resp.Ok() {
+		glog.Error(c.host, ": RPC error in Prepare: ", resp.Error())
 		return 0, errors.New(resp.Error())
 	}
 	var respMsg proto.PrepareResponse
@@ -96,7 +97,7 @@ func (c *client) Accept(i con.InstanceNumber, s con.SequenceNumber, chgs []con.C
 	}
 	resp := rpcReq.GoProto(&req)
 	if !resp.Ok() {
-		glog.Error(c.host, ": RPC error: ", resp.Error())
+		glog.Error(c.host, ": RPC error in Accept: ", resp.Error())
 		return false, errors.New(resp.Error())
 	}
 	var respMsg proto.GenericResponse
@@ -119,6 +120,7 @@ func (c *client) AddMember(i con.InstanceNumber, s con.SequenceNumber, m con.Mem
 	}
 	resp := rpcReq.GoProto(req)
 	if !resp.Ok() {
+		glog.Error(c.host, ": RPC error in AddMember: ", resp.Error())
 		return errors.New(resp.Error())
 	}
 	var respMsg proto.GenericResponse
@@ -140,6 +142,7 @@ func (c *client) RemoveMember(i con.InstanceNumber, s con.SequenceNumber, m con.
 	}
 	resp := rpcReq.GoProto(req)
 	if !resp.Ok() {
+		glog.Error(c.host, ": RPC error in RemoveMember: ", resp.Error())
 		return errors.New(resp.Error())
 	}
 	var respMsg proto.GenericResponse
@@ -179,6 +182,7 @@ func (c *client) StartParticipation(i con.InstanceNumber,
 	}
 	resp := rpcReq.GoProto(req)
 	if !resp.Ok() {
+		glog.Error(c.host, ": RPC error in StartParticipation: ", resp.Error())
 		return errors.New(resp.Error())
 	}
 	resp.GetResponseMessage(&respMsg)
@@ -203,6 +207,7 @@ func (c *client) SubmitRequest(chg []con.Change) error {
 	}
 	resp := rpcReq.GoProto(req)
 	if !resp.Ok() {
+		glog.Error(c.host, ": RPC error in Submit: ", resp.Error())
 		return errors.New(resp.Error())
 	}
 	resp.GetResponseMessage(&respMsg)
