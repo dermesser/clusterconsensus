@@ -3,6 +3,7 @@ package clusterconsensus
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/golang/glog"
 )
@@ -100,9 +101,13 @@ loop:
 			} else {
 				failedVotes++
 			}
-			if acquiredVotes >= requiredVotes {
+			if acquiredVotes >= requiredVotes || (acquiredVotes+failedVotes) >= len(p.members)-1 {
 				break loop
 			}
+		case <-time.NewTimer(5 * time.Second).C:
+			// This is not supposed to happen! Usually we wait for all votes/fails
+			glog.Error("timeout while waiting for accepts!")
+			break loop
 		}
 	}
 
