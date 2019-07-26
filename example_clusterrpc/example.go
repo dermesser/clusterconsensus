@@ -568,8 +568,10 @@ func main() {
 			continue
 		}
 		if i%5 == 0 {
+			participant.Lock()
 			glog.Info("master? ", participant.IsMaster(), " state len: ", len(participant.GetState().(State).inner),
 				" state: ", participant.GetState().(State))
+			participant.Unlock()
 		}
 		i++
 	}

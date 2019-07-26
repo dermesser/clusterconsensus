@@ -28,7 +28,7 @@ func (p *Participant) submitAsMaster(c []Change) error {
 	// TODO: Use contexts
 
 	var localMx sync.Mutex
-	wait := make(chan bool, requiredVotes)
+	wait := make(chan bool, len(p.members))
 
 	p.Unlock()
 	// Send out Accept() requests
@@ -47,7 +47,6 @@ func (p *Participant) submitAsMaster(c []Change) error {
 		member := member
 		go func() {
 			ok, err := client.Accept(p.instance, p.sequence+1, c)
-
 			if err != nil {
 				glog.Error("client ", member, " did not accept: ", err)
 				localMx.Lock()

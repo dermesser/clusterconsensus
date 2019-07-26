@@ -23,6 +23,8 @@ func NewParticipant(cluster string, connector Connector, initialState State) *Pa
 		instance: 0,
 		sequence: 0,
 
+		failedSubmits: 0,
+
 		state:            initialState,
 		participantState: state_UNJOINED,
 
